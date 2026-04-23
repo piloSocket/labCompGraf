@@ -111,7 +111,6 @@ void dibujarPelota() {
 	gluSphere(gluNewQuadric(), 1, 30, 30);
 	glPopMatrix();
 }
-
 void dibujarPlataforma(float x) {
 	glPushMatrix();
 	glTranslatef(x, 0.5, 22);
@@ -120,6 +119,43 @@ void dibujarPlataforma(float x) {
 }
 
 using namespace std;
+
+void dibujarDefensas(){
+	glPushMatrix();
+	glTranslatef(-12, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-8, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-4, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(4, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(8, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(12, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+}
 
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
@@ -240,6 +276,8 @@ int main(int argc, char *argv[]) {
 			xPlataforma = max(xPlataforma, -12.5f);
 		}
 		dibujarPlataforma(xPlataforma);
+
+		dibujarDefensas();
 		glDisable(GL_LIGHTING);
 
 		//MANEJO DE EVENTOS
