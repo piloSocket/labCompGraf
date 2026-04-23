@@ -10,8 +10,6 @@
 #include <GL/glu.h>
 #endif
 
-#include "include/plataforma.hpp"
-
 using namespace std;
 GLuint textura;
 
@@ -132,6 +130,42 @@ public:
 	}
 
 	void dibujar() {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+		glCallList(display_list);
+		glPopMatrix();
+	}
+};
+
+class Plataforma {
+private:
+	float largo, alto, ancho;
+	float x, y, z, v, max_x;
+	int display_list;
+public:
+	explicit Plataforma(float max_x): max_x(max_x) {
+		display_list = glGenLists(1);
+
+		largo = 5;
+		alto = 1;
+		ancho = 1;
+		x = 0;
+		y = alto / 2;
+		z = 22;
+		v = 15;
+
+		glNewList(display_list, GL_COMPILE);
+		dibujarCubo(largo, alto, ancho);
+		glEndList();
+	}
+
+	void mover(float dt, float direccion) {
+		x += v * dt * direccion;
+		x = min(x, max_x - largo / 2);
+		x = max(x, -max_x + largo / 2);
+	}
+
+	void dibujar()  {
 		glPushMatrix();
 		glTranslatef(x, y, z);
 		glCallList(display_list);
