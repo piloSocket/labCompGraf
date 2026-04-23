@@ -1,8 +1,4 @@
 #include "../include/plataforma.hpp"
-#include "SDL.h"
-#include "SDL_opengl.h"
-#include <iostream>
-#include "FreeImage.h"
 #include <stdio.h>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>

@@ -44,7 +44,6 @@ void dibujarCubo(float w, float h, float d) {
 	glEnd();
 }
 
-
 void dibujarCuboconTextura(float w, float h, float d) {
 	float x = w / 2.0f, y = h / 2.0f, z = d / 2.0f;
 
@@ -113,42 +112,32 @@ void dibujarPelota() {
 	glPopMatrix();
 }
 
-void dibujarDefensas(){
-	glPushMatrix();
-	glTranslatef(-12, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
+class Defensa {
+private:
+	int display_list;
+	float largo, alto, ancho;
+	float x, y, z;
+public:
+	Defensa(float x, float z): x(x), z(z) {
+		display_list = glGenLists(2);
 
-	glPushMatrix();
-	glTranslatef(-8, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
+		largo = 3;
+		alto = 1;
+		ancho = 1;
+		y = alto / 2;
 
-	glPushMatrix();
-	glTranslatef(-4, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
+		glNewList(display_list, GL_COMPILE);
+		dibujarCubo(largo, alto, ancho);
+		glEndList();
+	}
 
-	glPushMatrix();
-	glTranslatef(0, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
-
-	glPushMatrix();
-	glTranslatef(4, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
-
-	glPushMatrix();
-	glTranslatef(8, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
-
-	glPushMatrix();
-	glTranslatef(12, 1, -10);
-	dibujarCubo(3, 1, 2);
-	glPopMatrix();
-}
+	void dibujar() {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+		glCallList(display_list);
+		glPopMatrix();
+	}
+};
 
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
@@ -220,6 +209,14 @@ int main(int argc, char *argv[]) {
 	bool textOn = true;
 
 	Plataforma plataforma(15);
+	Defensa d1(-12, -10),
+			d2(-8, -10),
+			d3(-4, -10),
+			d4(0, -10),
+			d5(4, -10),
+			d6(8, -10),
+			d7(12, -10);
+
 	bool left = false, right = false;
 
 	Uint32 last = SDL_GetTicks();
@@ -239,11 +236,11 @@ int main(int argc, char *argv[]) {
 		glLightfv(GL_LIGHT1, GL_POSITION, luz_posicion1);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
 		
-		glEnable(GL_LIGHT2); // habilita la luz 0
+		glEnable(GL_LIGHT2); // habilita la luz 2
 		glLightfv(GL_LIGHT2, GL_POSITION, luz_posicion2);
 		glLightfv(GL_LIGHT2, GL_DIFFUSE, colorLuz);
 		
-		glEnable(GL_LIGHT3); // habilita la luz 1
+		glEnable(GL_LIGHT3); // habilita la luz 3
 		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
 		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
 
@@ -264,8 +261,14 @@ int main(int argc, char *argv[]) {
 		if (left)
 			plataforma.mover(deltaTime, -1);
 		plataforma.dibujar();
+		d1.dibujar();
+		d2.dibujar();
+		d3.dibujar();
+		d4.dibujar();
+		d5.dibujar();
+		d6.dibujar();
+		d7.dibujar();
 
-		dibujarDefensas();
 		glDisable(GL_LIGHTING);
 
 		//MANEJO DE EVENTOS
