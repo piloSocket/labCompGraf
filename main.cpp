@@ -9,6 +9,7 @@
 #include <conio.h>
 #include <GL/glu.h>
 #endif
+#include <algorithm>
 
 using namespace std;
 GLuint textura;
@@ -110,6 +111,16 @@ void dibujarPelota() {
 	gluSphere(gluNewQuadric(), 1, 30, 30);
 	glPopMatrix();
 }
+
+void dibujarPlataforma(float x) {
+	glPushMatrix();
+	glTranslatef(x, 0.5, 22);
+	dibujarCubo(5, 1, 1);
+	glPopMatrix();
+}
+
+using namespace std;
+
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
 	if (SDL_Init(SDL_INIT_VIDEO)<0) {
@@ -172,13 +183,19 @@ int main(int argc, char *argv[]) {
 	z = 50;
 	float degrees = 0;
 
-	GLfloat luz_posicion[4] = { 20, 5, 20, 1 };
+	GLfloat luz_posicion[4] = { 20, 5, 30, 1 };
 	GLfloat luz_posicion1[4] = { 20, 5, -20, 1 };
-	GLfloat luz_posicion2[4] = { -20, 5, 20, 1 };
-	GLfloat luz_posicion3[4] = { -20, 5, -20, 1 };
+	GLfloat luz_posicion2[4] = { -15, 5, 30, 1 };
+	GLfloat luz_posicion3[4] = { -15, 5, -20, 1 };
 	GLfloat colorLuz[4] = { 1, 1, 1, 1 };
 	//FIN INICIALIZACION
 	bool textOn = true;
+
+	float xPlataforma = 0;
+	bool left = false,
+		 right = false;
+
+	Uint32 last = SDL_GetTicks();
 
 	//LOOP PRINCIPAL
 	do{
@@ -203,6 +220,9 @@ int main(int argc, char *argv[]) {
 		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
 		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
 
+		Uint32 now = SDL_GetTicks();
+	    float deltaTime = (now - last) / 1000.0f;
+
 		glEnable(GL_LIGHTING);
 
 		dibujarArco();
@@ -211,6 +231,15 @@ int main(int argc, char *argv[]) {
 		dibujarCancha();
 
 		dibujarPelota();
+
+		if (right) {
+			xPlataforma += 5 * deltaTime;
+			xPlataforma = min(xPlataforma, 12.5f);
+		} else if (left) {
+			xPlataforma -= 5 * deltaTime;
+			xPlataforma = max(xPlataforma, -12.5f);
+		}
+		dibujarPlataforma(xPlataforma);
 		glDisable(GL_LIGHTING);
 
 		//MANEJO DE EVENTOS
@@ -226,6 +255,16 @@ int main(int argc, char *argv[]) {
 			case SDL_QUIT:
 				fin = true;
 				break;
+			case SDL_KEYDOWN:
+				switch (evento.key.keysym.sym) {
+				case SDLK_RIGHT:
+					right = true;
+					break;
+				case SDLK_LEFT:
+					left = true;
+					break;
+				}
+				break;
 			case SDL_KEYUP:
 				switch (evento.key.keysym.sym) {
 				case SDLK_ESCAPE:
@@ -235,13 +274,20 @@ int main(int argc, char *argv[]) {
 					textOn = !textOn;
 					break;
 				case SDLK_RIGHT:
+					right = false;
+					break;
+				case SDLK_LEFT:
+					left = false;
 					break;
 				}
 			}
 		}
 		//FIN MANEJO DE EVENTOS
 		SDL_GL_SwapWindow(win);
+
+	    last = now;
 	} while (!fin);
+
 	//FIN LOOP PRINCIPAL
 	// LIMPIEZA
 	SDL_GL_DeleteContext(context);
