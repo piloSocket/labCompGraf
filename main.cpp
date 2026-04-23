@@ -127,7 +127,7 @@ public:
 		x = 0;
 		y = alto / 2;
 		z = 22;
-		v = 5;
+		v = 15;
 
 		glNewList(display_list, GL_COMPILE);
 		dibujarCubo(largo, alto, ancho);
@@ -135,7 +135,7 @@ public:
 	}
 
 	void mover(float dt, float direccion) {
-		x += 5 * dt * direccion;
+		x += v * dt * direccion;
 		x = min(x, max_x - largo / 2);
 		x = max(x, -max_x + largo / 2);
 	}
