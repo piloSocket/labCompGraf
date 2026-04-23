@@ -105,6 +105,12 @@ void dibujarCancha() {
 	glDisable(GL_TEXTURE_2D);
 }
 
+void dibujarPelota() {
+	glPushMatrix();
+	glTranslatef(0, 1, 0);
+	gluSphere(gluNewQuadric(), 1, 30, 30);
+	glPopMatrix();
+}
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
 	if (SDL_Init(SDL_INIT_VIDEO)<0) {
@@ -129,7 +135,7 @@ int main(int argc, char *argv[]) {
 
 	//TEXTURA
 	char* archivo = new char[20];
-	archivo = "canchaFutbol.jpg";
+	archivo = "../canchaFutbol.jpg";
 
 	//CARGAR IMAGEN
 	FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(archivo);
@@ -199,6 +205,7 @@ int main(int argc, char *argv[]) {
 		luzAmbiente(1, 1, 1);
 		dibujarCancha();
 
+		dibujarPelota();
 		glDisable(GL_LIGHTING);
 
 		//MANEJO DE EVENTOS
