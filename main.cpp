@@ -11,7 +11,7 @@
 #endif
 
 using namespace std;
-
+GLuint textura;
 void luzDifusa(float r, float g, float b) {
 	GLfloat diffuse[] = {r, g, b, 1.0f};
 	glMaterialfv(GL_FRONT, GL_DIFFUSE, diffuse);
@@ -28,6 +28,30 @@ void dibujarCubo(float w, float h, float d) {
 	glBegin(GL_QUADS);
 	// Front
 	glNormal3f(0, 0, 1); glVertex3f(-x, -y, z); glVertex3f(x, -y, z); glVertex3f(x, y, z); glVertex3f(-x, y, z);
+	// Back
+	glNormal3f(0, 0, -1); glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z); glVertex3f(x, y, -z); glVertex3f(x, -y, -z);
+	// Top
+	glNormal3f(0, 1, 0); glVertex3f(-x, y, -z); glVertex3f(-x, y, z); glVertex3f(x, y, z); glVertex3f(x, y, -z);
+	// Bottom
+	glNormal3f(0, -1, 0); glVertex3f(-x, -y, -z); glVertex3f(x, -y, -z); glVertex3f(x, -y, z); glVertex3f(-x, -y, z);
+	// Right
+	glNormal3f(1, 0, 0); glVertex3f(x, -y, -z); glVertex3f(x, y, -z); glVertex3f(x, y, z); glVertex3f(x, -y, z);
+	// Left
+	glNormal3f(-1, 0, 0); glVertex3f(-x, -y, -z); glVertex3f(-x, -y, z); glVertex3f(-x, y, z); glVertex3f(-x, y, -z);
+	glEnd();
+}
+
+
+void dibujarCuboconTextura(float w, float h, float d) {
+	float x = w / 2.0f, y = h / 2.0f, z = d / 2.0f;
+
+	glBegin(GL_QUADS);
+	// CARA SUPERIOR (La que sería la cancha)
+	glNormal3f(0, 1, 0);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(-x, y, -z); // Abajo-Izquierda de la foto
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y, -z);  // Abajo-Derecha de la foto
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y, z);   // Arriba-Derecha de la foto
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(-x, y, z);  // Arriba-Izquierda de la foto
 	// Back
 	glNormal3f(0, 0, -1); glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z); glVertex3f(x, y, -z); glVertex3f(x, -y, -z);
 	// Top
@@ -59,10 +83,15 @@ void dibujarArco() {
 }
 
 void dibujarCancha() {
+	glEnable(GL_TEXTURE_2D);       // 1. Activo texturas
+	glBindTexture(GL_TEXTURE_2D, textura); // 2. Uso la de la cancha
+
 	glPushMatrix();
-	glTranslatef(0., -0.4, 0.);
-	dibujarCubo(30, 0.4, 40);
+	glTranslatef(0, 0, 0.2f);
+	dibujarCuboconTextura(30, 0.4, 20); // 3. Dibujo
 	glPopMatrix();
+
+	glDisable(GL_TEXTURE_2D);
 }
 
 int main(int argc, char *argv[]) {
@@ -89,7 +118,7 @@ int main(int argc, char *argv[]) {
 
 	//TEXTURA
 	char* archivo = new char[20];
-	archivo = "../canon.png";
+	archivo = "../canchaFutbol.jpg";
 
 	//CARGAR IMAGEN
 	FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(archivo);
@@ -100,7 +129,6 @@ int main(int argc, char *argv[]) {
 	void* datos = FreeImage_GetBits(bitmap);
 	//FIN CARGAR IMAGEN
 
-	GLuint textura;
 	glGenTextures(1, &textura);
 	glBindTexture(GL_TEXTURE_2D, textura);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -109,8 +137,6 @@ int main(int argc, char *argv[]) {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_BGR, GL_UNSIGNED_BYTE, datos);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	//FIN TEXTURA
-
 
 	bool fin = false;
 	bool rotate = false;
