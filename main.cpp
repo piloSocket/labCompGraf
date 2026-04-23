@@ -41,6 +41,30 @@ void dibujarCubo(float w, float h, float d) {
 	glEnd();
 }
 
+void dibujarArco() {
+	glPushMatrix();
+	glTranslatef(-6, 3.5, -20.);
+	dibujarCubo(1, 8, 1);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(.0, 7, -20.);
+	dibujarCubo(12, 1, 1);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(6, 3.5, -20.);
+	dibujarCubo(1, 8, 1);
+	glPopMatrix();
+}
+
+void dibujarCancha() {
+	glPushMatrix();
+	glTranslatef(0., -0.4, 0.);
+	dibujarCubo(30, 0.4, 40);
+	glPopMatrix();
+}
+
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
 	if (SDL_Init(SDL_INIT_VIDEO)<0) {
@@ -51,7 +75,7 @@ int main(int argc, char *argv[]) {
 	SDL_Window* win = SDL_CreateWindow("Lab 1 Comp. Grafica, Juan Andres Olmedo y Francisco Piloni",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+		1000, 700, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext context = SDL_GL_CreateContext(win);
 
 	glMatrixMode(GL_PROJECTION);
@@ -59,7 +83,7 @@ int main(int argc, char *argv[]) {
 	float color = 0;
 	glClearColor(color, color, color, 1);
 
-	gluPerspective(45, 640 / 480.f, 0.1, 110);
+	gluPerspective(45, 1000 / 700.f, 0.1, 110);
 	glEnable(GL_DEPTH_TEST);
 	glMatrixMode(GL_MODELVIEW);
 
@@ -100,8 +124,8 @@ int main(int argc, char *argv[]) {
 	z = 40;
 	float degrees = 0;
 
-	GLfloat luz_posicion[4] = { 0, 0, 1, 1 };
-	GLfloat luz_posicion1[4] = { 0, 0, -1, 1 };
+	GLfloat luz_posicion[4] = { 0, 5, 1, 1 };
+	GLfloat luz_posicion1[4] = { 0, 5, -2, 1 };
 	GLfloat colorLuz[4] = { 1, 1, 1, 1 };
 	//FIN INICIALIZACION
 	bool textOn = true;
@@ -120,37 +144,15 @@ int main(int argc, char *argv[]) {
 		glEnable(GL_LIGHT1); // habilita la luz 1
 		glLightfv(GL_LIGHT1, GL_POSITION, luz_posicion1);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
-
-		glPushMatrix();
 		
 		glEnable(GL_LIGHTING);
 		luzDifusa(1.0, 0., 1.0);
 		luzAmbiente(.2, 0., 0.2);
 
-		glRotatef(degrees, 0.0, 1.0, 0.0);
-
-		glPushMatrix();
-		glTranslatef(-15.0, 0., 0.);
-		dibujarCubo(1, 20, 1);
-		glPopMatrix();
-
-		glPushMatrix();
-		glTranslatef(.0, 10, 0.);
-		dibujarCubo(30, 1, 1);
-		glPopMatrix();
-
-		glPushMatrix();
-		glTranslatef(15.0, 0., 0.);
-		dibujarCubo(1, 20, 1);
-		glPopMatrix();
-
-		glPushMatrix();
-		glTranslatef(0, 0, 0.2f);
-		dibujarCubo(30, 0.4, 20);
-		glPopMatrix();
+		dibujarArco();
+		dibujarCancha();
 
 		glDisable(GL_LIGHTING);
-		glPopMatrix();
 
 		//MANEJO DE EVENTOS
 		while (SDL_PollEvent(&evento)){
