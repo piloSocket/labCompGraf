@@ -12,6 +12,7 @@
 
 using namespace std;
 GLuint textura;
+
 void luzDifusa(float r, float g, float b) {
 	GLfloat diffuse[] = {r, g, b, 1.0f};
 	glMaterialfv(GL_FRONT, GL_DIFFUSE, diffuse);
@@ -66,14 +67,12 @@ void dibujarCuboconTextura(float w, float h, float d) {
 }
 
 void dibujarArco() {
-	float altura = 6,
-	      largo = 15,
-	      ancho = 1;
+	float altura = 5,
+	      largo = 12,
+	      ancho = 0.5;
 
 	glPushMatrix();
 	glTranslatef(.0, 0, -25.);
-
-	glScalef(0.7, 0.7, 0.7);
 
 	glPushMatrix();
 	glTranslatef(-largo / 2.0, (altura - ancho) / 2.0, 0.);
@@ -98,7 +97,7 @@ void dibujarCancha() {
 	glBindTexture(GL_TEXTURE_2D, textura); // 2. Uso la de la cancha
 
 	glPushMatrix();
-	glTranslatef(0, 0, 0.2f);
+	glTranslatef(0, -0.2, 0);
 	dibujarCuboconTextura(30, 0.4, 50); // 3. Dibujo
 	glPopMatrix();
 
@@ -129,7 +128,11 @@ int main(int argc, char *argv[]) {
 
 	//TEXTURA
 	char* archivo = new char[20];
-	archivo = "canchaFutbol.jpg";
+	#ifdef __APPLE__
+		archivo = "canchaFutbol.jpg";
+	#else
+		archivo = "../canchaFutbol.jpg";
+	#endif
 
 	//CARGAR IMAGEN
 	FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(archivo);
@@ -148,6 +151,8 @@ int main(int argc, char *argv[]) {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_BGR, GL_UNSIGNED_BYTE, datos);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, w, h, GL_RGB, GL_UNSIGNED_BYTE, datos);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
 	bool fin = false;
 	bool rotate = false;
