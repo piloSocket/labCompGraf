@@ -210,11 +210,10 @@ int main(int argc, char *argv[]) {
 	glMatrixMode(GL_MODELVIEW);
 
 	//TEXTURA
-	char archivo[20];
 	#ifdef __APPLE__
-		archivo = "canchaFutbol.jpg";
+		char archivo[] = "canchaFutbol.jpg";
 	#else
-		archivo = "../canchaFutbol.jpg";
+		char archivo[] = "../canchaFutbol.jpg";
 	#endif
 
 	//CARGAR IMAGEN
