@@ -66,19 +66,30 @@ void dibujarCuboconTextura(float w, float h, float d) {
 }
 
 void dibujarArco() {
+	float altura = 6,
+	      largo = 15,
+	      ancho = 1;
+
 	glPushMatrix();
-	glTranslatef(-6, 3.5, -20.);
-	dibujarCubo(1, 8, 1);
+	glTranslatef(.0, 0, -25.);
+
+	glScalef(0.7, 0.7, 0.7);
+
+	glPushMatrix();
+	glTranslatef(-largo / 2.0, (altura - ancho) / 2.0, 0.);
+	dibujarCubo(ancho, altura, ancho);
 	glPopMatrix();
 
 	glPushMatrix();
-	glTranslatef(.0, 7, -20.);
-	dibujarCubo(12, 1, 1);
+	glTranslatef(.0, altura - ancho, 0.);
+	dibujarCubo(largo, ancho, ancho);
 	glPopMatrix();
 
 	glPushMatrix();
-	glTranslatef(6, 3.5, -20.);
-	dibujarCubo(1, 8, 1);
+	glTranslatef(largo / 2.0, (altura - ancho) / 2.0, 0.);
+	dibujarCubo(ancho, altura, ancho);
+	glPopMatrix();
+
 	glPopMatrix();
 }
 
@@ -88,7 +99,7 @@ void dibujarCancha() {
 
 	glPushMatrix();
 	glTranslatef(0, 0, 0.2f);
-	dibujarCuboconTextura(30, 0.4, 20); // 3. Dibujo
+	dibujarCuboconTextura(30, 0.4, 50); // 3. Dibujo
 	glPopMatrix();
 
 	glDisable(GL_TEXTURE_2D);
@@ -118,7 +129,7 @@ int main(int argc, char *argv[]) {
 
 	//TEXTURA
 	char* archivo = new char[20];
-	archivo = "../canchaFutbol.jpg";
+	archivo = "canchaFutbol.jpg";
 
 	//CARGAR IMAGEN
 	FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(archivo);
@@ -146,12 +157,14 @@ int main(int argc, char *argv[]) {
 	float x, y, z;
 
 	x = 0;
-	y = 10;
-	z = 40;
+	y = 15;
+	z = 50;
 	float degrees = 0;
 
-	GLfloat luz_posicion[4] = { 0, 5, 1, 1 };
-	GLfloat luz_posicion1[4] = { 0, 5, -2, 1 };
+	GLfloat luz_posicion[4] = { 20, 5, 20, 1 };
+	GLfloat luz_posicion1[4] = { 20, 5, -20, 1 };
+	GLfloat luz_posicion2[4] = { -20, 5, 20, 1 };
+	GLfloat luz_posicion3[4] = { -20, 5, -20, 1 };
 	GLfloat colorLuz[4] = { 1, 1, 1, 1 };
 	//FIN INICIALIZACION
 	bool textOn = true;
@@ -171,11 +184,19 @@ int main(int argc, char *argv[]) {
 		glLightfv(GL_LIGHT1, GL_POSITION, luz_posicion1);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
 		
+		glEnable(GL_LIGHT2); // habilita la luz 0
+		glLightfv(GL_LIGHT2, GL_POSITION, luz_posicion2);
+		glLightfv(GL_LIGHT2, GL_DIFFUSE, colorLuz);
+		
+		glEnable(GL_LIGHT3); // habilita la luz 1
+		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
+		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
+
 		glEnable(GL_LIGHTING);
-		luzDifusa(1.0, 0., 1.0);
-		luzAmbiente(.2, 0., 0.2);
 
 		dibujarArco();
+
+		luzAmbiente(1, 1, 1);
 		dibujarCancha();
 
 		glDisable(GL_LIGHTING);
