@@ -96,8 +96,8 @@ int main(int argc, char *argv[]) {
 	float x, y, z;
 
 	x = 0;
-	y = 0;
-	z = 7;
+	y = 10;
+	z = 40;
 	float degrees = 0;
 
 	GLfloat luz_posicion[4] = { 0, 0, 1, 1 };
@@ -122,15 +122,11 @@ int main(int argc, char *argv[]) {
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
 
 		glPushMatrix();
-		if (rotate) {
-			degrees = degrees + 0.1;
-		}
-
+		
 		glEnable(GL_LIGHTING);
 		luzDifusa(1.0, 0., 1.0);
 		luzAmbiente(.2, 0., 0.2);
 
-		glTranslatef(0., 0., -60.);
 		glRotatef(degrees, 0.0, 1.0, 0.0);
 
 		glPushMatrix();
@@ -146,6 +142,11 @@ int main(int argc, char *argv[]) {
 		glPushMatrix();
 		glTranslatef(15.0, 0., 0.);
 		dibujarCubo(1, 20, 1);
+		glPopMatrix();
+
+		glPushMatrix();
+		glTranslatef(0, 0, 0.2f);
+		dibujarCubo(30, 0.4, 20);
 		glPopMatrix();
 
 		glDisable(GL_LIGHTING);
