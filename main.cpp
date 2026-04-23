@@ -12,8 +12,19 @@
 
 using namespace std;
 
-void dibujarCubo3D(float w, float h, float d) {
+void luzDifusa(float r, float g, float b) {
+	GLfloat diffuse[] = {r, g, b, 1.0f};
+	glMaterialfv(GL_FRONT, GL_DIFFUSE, diffuse);
+}
+
+void luzAmbiente(float r, float g, float b) {
+	GLfloat ambient[] = {r, g, b, 1.0f};
+	glMaterialfv(GL_FRONT, GL_AMBIENT, ambient);
+}
+
+void dibujarCubo(float w, float h, float d) {
 	float x = w / 2.0f, y = h / 2.0f, z = d / 2.0f;
+
 	glBegin(GL_QUADS);
 	// Front
 	glNormal3f(0, 0, 1); glVertex3f(-x, -y, z); glVertex3f(x, -y, z); glVertex3f(x, y, z); glVertex3f(-x, y, z);
@@ -48,7 +59,7 @@ int main(int argc, char *argv[]) {
 	float color = 0;
 	glClearColor(color, color, color, 1);
 
-	gluPerspective(45, 640 / 480.f, 0.1, 100);
+	gluPerspective(45, 640 / 480.f, 0.1, 110);
 	glEnable(GL_DEPTH_TEST);
 	glMatrixMode(GL_MODELVIEW);
 
@@ -111,49 +122,34 @@ int main(int argc, char *argv[]) {
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
 
 		glPushMatrix();
-		//TRANSFORMACIONES LINEALES
-		if (rotate){
+		if (rotate) {
 			degrees = degrees + 0.1;
 		}
+
+		glEnable(GL_LIGHTING);
+		luzDifusa(1.0, 0., 1.0);
+		luzAmbiente(.2, 0., 0.2);
+
+		glTranslatef(0., 0., -60.);
 		glRotatef(degrees, 0.0, 1.0, 0.0);
 
-		//DIBUJAR OBJETOS
-		//DIBUJO TRIANGULO CON COLOR
-		glBegin(GL_TRIANGLES);
-			glColor3f(1.0, 0.0, 0.0);
-			glVertex3f(1., -1., 0.);
-			glVertex3f(-1., -1., 0.);
-			glVertex3f(0., 1., 0.);
-		glEnd();
+		glPushMatrix();
+		glTranslatef(-15.0, 0., 0.);
+		dibujarCubo(1, 20, 1);
 		glPopMatrix();
 
-		//DIBUJO TRIANGULO CON TEXTURA
-		if (textOn){
-			glEnable(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, textura);
-		}
-		glBegin(GL_TRIANGLES);
-			glColor3f(1.0, 1.0, 1.0);
-			glTexCoord2f(0, 0);
-			glVertex3f(3., -1., 0.);
-			glTexCoord2f(0, 1);
-			glVertex3f(1., -1., 0.);
-			glTexCoord2f(1, 0);
-			glVertex3f(2., 1., 0.);
-		glEnd();
-		glDisable(GL_TEXTURE_2D);
+		glPushMatrix();
+		glTranslatef(.0, 10, 0.);
+		dibujarCubo(30, 1, 1);
+		glPopMatrix();
 
-		//DIBUJO TRIANGULO CON LUZ
-		glEnable(GL_LIGHTING);
-		glBegin(GL_TRIANGLES);
-			glNormal3f(0, 0, 1);
-			glVertex3f(-1., -1., 0.);
-			glVertex3f(-3., -1., 0.);
-			glVertex3f(-2., 1., 0.);
-		glEnd();
+		glPushMatrix();
+		glTranslatef(15.0, 0., 0.);
+		dibujarCubo(1, 20, 1);
+		glPopMatrix();
+
 		glDisable(GL_LIGHTING);
-
-		//FIN DIBUJAR OBJETOS
+		glPopMatrix();
 
 		//MANEJO DE EVENTOS
 		while (SDL_PollEvent(&evento)){
