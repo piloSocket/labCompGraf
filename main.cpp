@@ -111,12 +111,42 @@ void dibujarPelota() {
 	gluSphere(gluNewQuadric(), 1, 30, 30);
 	glPopMatrix();
 }
-void dibujarPlataforma(float x) {
-	glPushMatrix();
-	glTranslatef(x, 0.5, 22);
-	dibujarCubo(5, 1, 1);
-	glPopMatrix();
-}
+
+class Plataforma {
+private:
+	float largo, alto, ancho;
+	float x, y, z, v, max_x;
+	int display_list;
+public:
+	explicit Plataforma(float max_x): max_x(max_x) {
+		display_list = glGenLists(1);
+
+		largo = 5;
+		alto = 1;
+		ancho = 1;
+		x = 0;
+		y = alto / 2;
+		z = 22;
+		v = 5;
+
+		glNewList(display_list, GL_COMPILE);
+		dibujarCubo(largo, alto, ancho);
+		glEndList();
+	}
+
+	void mover(float dt, float direccion) {
+		x += 5 * dt * direccion;
+		x = min(x, max_x - largo / 2);
+		x = max(x, -max_x + largo / 2);
+	}
+
+	void dibujar() {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+		glCallList(display_list);
+		glPopMatrix();
+	}
+};
 
 using namespace std;
 
@@ -180,7 +210,7 @@ int main(int argc, char *argv[]) {
 	glMatrixMode(GL_MODELVIEW);
 
 	//TEXTURA
-	char* archivo = new char[20];
+	char archivo[20];
 	#ifdef __APPLE__
 		archivo = "canchaFutbol.jpg";
 	#else
@@ -227,7 +257,7 @@ int main(int argc, char *argv[]) {
 	//FIN INICIALIZACION
 	bool textOn = true;
 
-	float xPlataforma = 0;
+	Plataforma plataforma(15);
 	bool left = false,
 		 right = false;
 
@@ -268,14 +298,11 @@ int main(int argc, char *argv[]) {
 
 		dibujarPelota();
 
-		if (right) {
-			xPlataforma += 5 * deltaTime;
-			xPlataforma = min(xPlataforma, 12.5f);
-		} else if (left) {
-			xPlataforma -= 5 * deltaTime;
-			xPlataforma = max(xPlataforma, -12.5f);
-		}
-		dibujarPlataforma(xPlataforma);
+		if (right)
+			plataforma.mover(deltaTime, 1);
+		if (left)
+			plataforma.mover(deltaTime, -1);
+		plataforma.dibujar();
 
 		dibujarDefensas();
 		glDisable(GL_LIGHTING);
