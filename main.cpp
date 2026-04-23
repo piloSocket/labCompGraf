@@ -111,6 +111,42 @@ void dibujarPelota() {
 	gluSphere(gluNewQuadric(), 1, 30, 30);
 	glPopMatrix();
 }
+void dibujarDefensas(){
+	glPushMatrix();
+	glTranslatef(-12, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-8, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(-4, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(0, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(4, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(8, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+
+	glPushMatrix();
+	glTranslatef(12, 1, -10);
+	dibujarCubo(3, 1, 2);
+	glPopMatrix();
+}
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
 	if (SDL_Init(SDL_INIT_VIDEO)<0) {
@@ -206,6 +242,7 @@ int main(int argc, char *argv[]) {
 		dibujarCancha();
 
 		dibujarPelota();
+		dibujarDefensas();
 		glDisable(GL_LIGHTING);
 
 		//MANEJO DE EVENTOS
