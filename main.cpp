@@ -3,8 +3,12 @@
 #include <iostream>
 #include "FreeImage.h"
 #include <stdio.h>
+#ifdef __APPLE__
+#include <OpenGL/glu.h>
+#else
 #include <conio.h>
 #include <GL/glu.h>
+#endif
 
 using namespace std;
 
@@ -130,7 +134,6 @@ int main(int argc, char *argv[]) {
 			glVertex3f(-2., 1., 0.);
 		glEnd();
 		glDisable(GL_LIGHTING);
-
 
 		//FIN DIBUJAR OBJETOS
 
