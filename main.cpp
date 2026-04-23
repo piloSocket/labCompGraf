@@ -12,6 +12,24 @@
 
 using namespace std;
 
+void dibujarCubo3D(float w, float h, float d) {
+	float x = w / 2.0f, y = h / 2.0f, z = d / 2.0f;
+	glBegin(GL_QUADS);
+	// Front
+	glNormal3f(0, 0, 1); glVertex3f(-x, -y, z); glVertex3f(x, -y, z); glVertex3f(x, y, z); glVertex3f(-x, y, z);
+	// Back
+	glNormal3f(0, 0, -1); glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z); glVertex3f(x, y, -z); glVertex3f(x, -y, -z);
+	// Top
+	glNormal3f(0, 1, 0); glVertex3f(-x, y, -z); glVertex3f(-x, y, z); glVertex3f(x, y, z); glVertex3f(x, y, -z);
+	// Bottom
+	glNormal3f(0, -1, 0); glVertex3f(-x, -y, -z); glVertex3f(x, -y, -z); glVertex3f(x, -y, z); glVertex3f(-x, -y, z);
+	// Right
+	glNormal3f(1, 0, 0); glVertex3f(x, -y, -z); glVertex3f(x, y, -z); glVertex3f(x, y, z); glVertex3f(x, -y, z);
+	// Left
+	glNormal3f(-1, 0, 0); glVertex3f(-x, -y, -z); glVertex3f(-x, -y, z); glVertex3f(-x, y, z); glVertex3f(-x, y, -z);
+	glEnd();
+}
+
 int main(int argc, char *argv[]) {
 	//INICIALIZACION
 	if (SDL_Init(SDL_INIT_VIDEO)<0) {
@@ -19,7 +37,7 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	SDL_Window* win = SDL_CreateWindow("ICG-UdelaR",
+	SDL_Window* win = SDL_CreateWindow("Lab 1 Comp. Grafica, Juan Andres Olmedo y Francisco Piloni",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
@@ -95,7 +113,7 @@ int main(int argc, char *argv[]) {
 		glPushMatrix();
 		//TRANSFORMACIONES LINEALES
 		if (rotate){
-			degrees = degrees + 1;
+			degrees = degrees + 0.1;
 		}
 		glRotatef(degrees, 0.0, 1.0, 0.0);
 
