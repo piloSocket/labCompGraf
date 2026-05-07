@@ -103,39 +103,6 @@ void dibujarCancha() {
 	glDisable(GL_TEXTURE_2D);
 }
 
-void dibujarPelota() {
-	glPushMatrix();
-	glTranslatef(0, 1, 0);
-	gluSphere(gluNewQuadric(), 1, 30, 30);
-	glPopMatrix();
-}
-
-class Defensa {
-private:
-	int display_list;
-	float largo, alto, ancho;
-	float x, y, z;
-public:
-	Defensa(float x, float z): x(x), z(z) {
-		display_list = glGenLists(2);
-
-		largo = 3;
-		alto = 1;
-		ancho = 1;
-		y = alto / 2;
-
-		glNewList(display_list, GL_COMPILE);
-		dibujarCubo(largo, alto, ancho);
-		glEndList();
-	}
-
-	void dibujar() {
-		glPushMatrix();
-		glTranslatef(x, y, z);
-		glCallList(display_list);
-		glPopMatrix();
-	}
-};
 
 class Plataforma {
 private:
@@ -166,6 +133,121 @@ public:
 	}
 
 	void dibujar()  {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+		glCallList(display_list);
+		glPopMatrix();
+	}
+
+	bool interseccionX(float x2, float z2, float radio) {
+		float dz = max(0.f, abs(z - z2) - ancho);
+
+	    // Distancia horizontal a cada cara lateral
+	    float dx_izq = abs((x - largo) - x2);
+	    float dx_der = abs((x + largo) - x2);
+
+	    // Intersecta si alcanza alguna de las dos caras y el z está en rango
+	    return (dx_izq * dx_izq + dz * dz <= radio * radio)
+	        || (dx_der * dx_der + dz * dz <= radio * radio);
+	}
+
+	bool interseccionZ(float x2, float z2, float radio) {
+	    float dx = max(0.f, abs(x - x2) - largo);
+
+	    float dz_frente = abs((z - ancho) - z2);
+	    float dz_atras  = abs((z + ancho) - z2);
+
+	    return (dx * dx + dz_frente * dz_frente <= radio * radio)
+	        || (dx * dx + dz_atras  * dz_atras  <= radio * radio);
+	}
+};
+
+class Pelota {
+private:
+	float radio;
+	float x, z, vx, vz, max_x, max_z;
+	int display_list;
+	Plataforma *plataforma;
+public:
+	// vxi y vzi son las velocidades iniciales en x y en z.
+	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z, Plataforma *p)
+		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z), plataforma(p) {
+		display_list = glGenLists(1);
+
+		GLUquadric* q = gluNewQuadric();
+
+		glNewList(display_list, GL_COMPILE);
+		glPushMatrix();
+		glTranslatef(0, 1, 0);
+		gluSphere(q, radio, 30, 30);
+		glPopMatrix();
+		glEndList();
+
+		gluDeleteQuadric(q);
+	}
+
+	void mover(float dt) {
+		x += dt * vx;
+		z += dt * vz;
+
+		if (max_z < z + radio) {
+			// Si la pelota toca el borde en max_z, perdés
+			z = x = vx = vz = 0;
+		} else if (z - radio < -max_z) {
+			// Si la pelota toca el borde en -max_z
+			z = -max_z + radio;
+			vz = -vz;
+		}
+		if (max_x < x + radio) {
+			// Si la pelota toca el borde en max_x
+			x = max_x - radio;
+			vx = -vx;
+		} else if (x - radio < -max_x) {
+			// Si la pelota toca el borde en -max_x
+			x = -max_x + radio;
+			vx = -vx;
+		}
+
+		if (plataforma->interseccionX(x, z, radio)) {
+			x -= dt * vx;
+			vx = -vx;
+			cout << "IX" << endl;
+		}
+		if (plataforma->interseccionZ(x, z, radio)) {
+			z -= dt * vz;
+			vz = -vz;
+			cout << "IZ" << endl;
+		}
+	}
+
+	void dibujar() {
+		glPushMatrix();
+		glTranslatef(x, 0, z);
+		glCallList(display_list);
+		glPopMatrix();
+	}
+};
+
+class Defensa {
+private:
+	float largo, alto, ancho;
+	float x, y, z;
+	int display_list;
+public:
+	Defensa(float x, float z): x(x), z(z) {
+		display_list = glGenLists(1);
+
+		largo = 3;
+		alto = 1;
+		ancho = 1;
+		y = alto / 2;
+
+		glNewList(display_list, GL_COMPILE);
+		dibujarCubo(largo, alto, ancho);
+		glEndList();
+	}
+
+	void dibujar() {
 		glPushMatrix();
 		glTranslatef(x, y, z);
 		glCallList(display_list);
@@ -250,6 +332,7 @@ int main(int argc, char *argv[]) {
 			d5(4, -10),
 			d6(8, -10),
 			d7(12, -10);
+	Pelota pelota(0, 0, 1, 10, 10, 15, 25, &plataforma);
 
 	bool left = false, right = false;
 
@@ -288,8 +371,7 @@ int main(int argc, char *argv[]) {
 		luzAmbiente(1, 1, 1);
 		dibujarCancha();
 
-		dibujarPelota();
-
+		pelota.mover(deltaTime);
 		if (right)
 			plataforma.mover(deltaTime, 1);
 		if (left)
@@ -302,6 +384,7 @@ int main(int argc, char *argv[]) {
 		d5.dibujar();
 		d6.dibujar();
 		d7.dibujar();
+		pelota.dibujar();
 
 		glDisable(GL_LIGHTING);
 
