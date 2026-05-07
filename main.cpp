@@ -286,46 +286,59 @@ public:
 	void mover(float dt) {
 		x += dt * vx;
 		z += dt * vz;
-		float r = 2 * (float) rand() / RAND_MAX - 0.5f;
+		bool interseccion = false;
 
 		if (max_z < z + radio) {
 			// Si la pelota toca el borde en max_z, perdés
 			z = x = vx = vz = 0;
+			interseccion = true;
 		} else if (z - radio < -max_z) {
 			// Si la pelota toca el borde en -max_z
 			z = -max_z + radio;
-			vz = -vz + r;
-			vx -= r;
+			vz = -vz;
+			interseccion = true;
 		}
 		if (max_x < x + radio) {
 			// Si la pelota toca el borde en max_x
 			x = max_x - radio;
-			vx = -vx + r;
-			vz -= r;
+			vx = -vx;
+			interseccion = true;
 		} else if (x - radio < -max_x) {
 			// Si la pelota toca el borde en -max_x
 			x = -max_x + radio;
-			vx = -vx + r;
-			vz -= r;
+			vx = -vx;
+			interseccion = true;
 		}
 
 		for (auto objeto: objetos->lista()) {
 			if (objeto->interseccionX(x, z, radio)) {
 				x -= dt * vx;
-				vx = -vx + r;
-				vz -= r;
+				vx = -vx;
+				interseccion = true;
 
 				if (dynamic_cast<Defensa*>(objeto))
 					objetos->borrar(objeto);
 			}
 			if (objeto->interseccionZ(x, z, radio)) {
 				z -= dt * vz;
-				vz = -vz + r;
-				vx -= r;
+				vz = -vz;
+				interseccion = true;
 
 				if (dynamic_cast<Defensa*>(objeto))
 					objetos->borrar(objeto);
 			}
+		}
+
+		// Si hubo una intersección, generar un cambio de ángulo chico aleatorio
+		// para que el juego no sea siempre igual.
+		if (interseccion) {
+			float a = 0.3 * (float) rand() / RAND_MAX - 0.15;
+
+			float cos_a = cos(a);
+			float sin_a = sin(a);
+
+			vx = vx * cos_a - vz * sin_a;
+			vz = vx * sin_a + vz * cos_a;
 		}
 	}
 
@@ -420,7 +433,7 @@ int main(int argc, char *argv[]) {
 	listaObjetos.agregar(&plataforma);
 	listaObjetos.agregar(&golero);
 
-	Pelota pelota(0, 0, 1, 12, 10, 15, 25, &listaObjetos);
+	Pelota pelota(0, 0, 1, 20, 20, 15, 25, &listaObjetos);
 
 	bool left = false, right = false;
 
