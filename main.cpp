@@ -3,6 +3,7 @@
 #include <iostream>
 #include "FreeImage.h"
 #include <stdio.h>
+#include <cmath>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>
 #else
@@ -12,6 +13,12 @@
 
 using namespace std;
 GLuint textura;
+
+enum ModoCamara { ORIGINAL, PERSONAJE, LIBRE };
+ModoCamara vistaActual = ORIGINAL;
+
+float pitch = 0.0f, yaw = -90.0f;
+float camX = 0, camY = 15, camZ = 50;
 
 void luzDifusa(float r, float g, float b) {
 	GLfloat diffuse[] = {r, g, b, 1.0f};
@@ -158,6 +165,8 @@ public:
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
 	}
+	float getX() const { return x; }
+	float getZ() const { return z; }
 
 	void mover(float dt, float direccion) {
 		x += v * dt * direccion;
@@ -257,9 +266,43 @@ int main(int argc, char *argv[]) {
 
 	//LOOP PRINCIPAL
 	do{
+		Uint32 now = SDL_GetTicks();
+		float deltaTime = (now - last) / 1000.0f;
+		last = now;
+		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
-		gluLookAt(x, y, z, 0, 0, 0, 0, 1, 0);
+
+		// --- CALCULO VECTORES DE CÁMARA ---
+		float lookX = cos(yaw * M_PI / 180.0f) * cos(pitch * M_PI / 180.0f);
+		float lookY = sin(pitch * M_PI / 180.0f);
+		float lookZ = sin(yaw * M_PI / 180.0f) * cos(pitch * M_PI / 180.0f);
+		
+		// --- APLICAR MODO DE CAMARA ---
+		float platX = plataforma.getX();
+		float platZ = plataforma.getZ();
+		switch (vistaActual) {
+		case ORIGINAL:
+			gluLookAt(0, 15, 50,
+				0, 0, 0,
+				0, 1, 0);
+			break;
+
+		case PERSONAJE:
+			gluLookAt(platX, 5, platZ + 10,
+				platX + lookX, 5 + lookY, (platZ + 8) + lookZ,
+				0, 1, 0);
+			break;
+
+		case LIBRE:
+			gluLookAt(camX, camY, camZ,
+				camX + lookX, camY + lookY, camZ + lookZ,
+				0, 1, 0);
+			break;
+		}
+		
+
+
 
 		//PRENDO LA LUZ (SIEMPRE DESPUES DEL gluLookAt)
 		glEnable(GL_LIGHT0); // habilita la luz 0
@@ -277,9 +320,6 @@ int main(int argc, char *argv[]) {
 		glEnable(GL_LIGHT3); // habilita la luz 3
 		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
 		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
-
-		Uint32 now = SDL_GetTicks();
-	    float deltaTime = (now - last) / 1000.0f;
 
 		glEnable(GL_LIGHTING);
 
@@ -305,50 +345,76 @@ int main(int argc, char *argv[]) {
 
 		glDisable(GL_LIGHTING);
 
-		//MANEJO DE EVENTOS
-		while (SDL_PollEvent(&evento)){
+		while (SDL_PollEvent(&evento)) {
 			switch (evento.type) {
-			case SDL_MOUSEBUTTONDOWN:
-				rotate = true;
-				cout << "ROT\n";
-				break;
-			case SDL_MOUSEBUTTONUP:
-				rotate = false;
-				break;
 			case SDL_QUIT:
 				fin = true;
 				break;
-			case SDL_KEYDOWN:
-				switch (evento.key.keysym.sym) {
-				case SDLK_RIGHT:
-					right = true;
-					break;
-				case SDLK_LEFT:
-					left = true;
-					break;
+
+			case SDL_MOUSEMOTION:
+				// IMPORTANTE: Solo rotamos si es modo LIBRE
+				if (vistaActual == LIBRE) {
+					if (evento.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+						// Paneo con click derecho
+						float panSpeed = 0.05f;
+						float rightX = sin(yaw * M_PI / 180.0f);
+						float rightZ = -cos(yaw * M_PI / 180.0f);
+						camX += -evento.motion.xrel * rightX * panSpeed;
+						camZ += -evento.motion.xrel * rightZ * panSpeed;
+						camY += evento.motion.yrel * panSpeed;
+					}
+					else {
+						// Rotación normal
+						float sensibilidad = 0.2f;
+						yaw += evento.motion.xrel * sensibilidad;
+						pitch -= evento.motion.yrel * sensibilidad;
+						if (pitch > 89.0f) pitch = 89.0f;
+						if (pitch < -89.0f) pitch = -89.0f;
+					}
 				}
 				break;
+
+			case SDL_MOUSEWHEEL:
+				if (vistaActual == LIBRE) {
+					float scrollSpeed = 3.0f;
+					camX += lookX * evento.wheel.y * scrollSpeed;
+					camY += lookY * evento.wheel.y * scrollSpeed;
+					camZ += lookZ * evento.wheel.y * scrollSpeed;
+				}
+				break;
+
+			case SDL_KEYDOWN:
+				switch (evento.key.keysym.sym) {
+				case SDLK_RIGHT: right = true; break;
+				case SDLK_LEFT:  left = true;  break;
+				case SDLK_v:
+					// Ciclo de cámaras
+					if (vistaActual == ORIGINAL) {
+						vistaActual = PERSONAJE;
+						SDL_SetRelativeMouseMode(SDL_FALSE); // No necesitamos atrapar mouse en 1ra persona fija
+					}
+					else if (vistaActual == PERSONAJE) {
+						vistaActual = LIBRE;
+						SDL_SetRelativeMouseMode(SDL_TRUE);  // Atrapamos para modo libre
+					}
+					else {
+						vistaActual = ORIGINAL;
+						SDL_SetRelativeMouseMode(SDL_FALSE);
+					}
+					break;
+				case SDLK_ESCAPE: fin = true; break;
+				}
+				break;
+
 			case SDL_KEYUP:
 				switch (evento.key.keysym.sym) {
-				case SDLK_ESCAPE:
-					fin = true;
-					break;
-				case SDLK_l:
-					textOn = !textOn;
-					break;
-				case SDLK_RIGHT:
-					right = false;
-					break;
-				case SDLK_LEFT:
-					left = false;
-					break;
+				case SDLK_RIGHT: right = false; break;
+				case SDLK_LEFT:  left = false;  break;
 				}
+				break;
 			}
 		}
-		//FIN MANEJO DE EVENTOS
 		SDL_GL_SwapWindow(win);
-
-	    last = now;
 	} while (!fin);
 
 	//FIN LOOP PRINCIPAL
