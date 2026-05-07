@@ -122,11 +122,11 @@ public:
 	virtual ~Objeto() = default;
 
 	bool interseccionX(float x2, float z2, float radio) {
-		float dz = max(0.f, abs(z - z2) - ancho);
+		float dz = max(0.f, abs(z - z2) - ancho / 2);
 
 	    // Distancia horizontal a cada cara lateral
-	    float dx_izq = abs((x - largo) - x2);
-	    float dx_der = abs((x + largo) - x2);
+	    float dx_izq = abs((x - largo / 2) - x2);
+	    float dx_der = abs((x + largo / 2) - x2);
 
 	    // Intersecta si alcanza alguna de las dos caras y el z está en rango
 	    return (dx_izq * dx_izq + dz * dz <= radio * radio)
@@ -134,10 +134,10 @@ public:
 	}
 
 	bool interseccionZ(float x2, float z2, float radio) {
-	    float dx = max(0.f, abs(x - x2) - largo);
+	    float dx = max(0.f, abs(x - x2) - largo / 2);
 
-	    float dz_frente = abs((z - ancho) - z2);
-	    float dz_atras  = abs((z + ancho) - z2);
+	    float dz_frente = abs((z - ancho / 2) - z2);
+	    float dz_atras  = abs((z + ancho / 2) - z2);
 
 	    return (dx * dx + dz_frente * dz_frente <= radio * radio)
 	        || (dx * dx + dz_atras  * dz_atras  <= radio * radio);
@@ -151,9 +151,8 @@ public:
 	}
 };
 
-class Golero {
+class Golero: public Objeto {
 private:
-	float x, y, z;
 	float velocidad;
 	int direccion; // 1 = Derecha, -1 = Izquierda
 	const float limite = 4.5f; // El arco mide 12, el golero se mueve en este rango
@@ -163,8 +162,17 @@ public:
 		x = 0.0f;
 		y = 1.5f;    // Altura media para que toque el suelo
 		z = -24.0f;  // Un poquito adelante del arco (que está en -25)
+		largo = 2.0;
+		alto = 3.0;
+		ancho = 1.0;
 		velocidad = 8.0f;
 		direccion = 1;
+
+		display_list = glGenLists(1);
+
+		glNewList(display_list, GL_COMPILE);
+		dibujarCubo(largo, alto, ancho);
+		glEndList();
 	}
 
 	void actualizar(float dt) {
@@ -180,15 +188,6 @@ public:
 			x = -limite;
 			direccion = 1;
 		}
-	}
-
-	void dibujar() {
-		glPushMatrix();
-		glTranslatef(x, y, z);
-
-		// Cuerpo del golero (ancho 2, alto 3, grosor 1)
-		dibujarCubo(2.0f, 3.0f, 1.0f);
-		glPopMatrix();
 	}
 };
 
@@ -252,6 +251,7 @@ public:
 
 	void borrar(Objeto *o) {
 		objetos.erase(remove(objetos.begin(), objetos.end(), o), objetos.end());
+		free(o);
 	}
 
 	vector<Objeto *> lista() {
@@ -286,7 +286,7 @@ public:
 	void mover(float dt) {
 		x += dt * vx;
 		z += dt * vz;
-		float r = (float) rand() / RAND_MAX - 0.5f;
+		float r = 2 * (float) rand() / RAND_MAX - 0.5f;
 
 		if (max_z < z + radio) {
 			// Si la pelota toca el borde en max_z, perdés
@@ -295,21 +295,25 @@ public:
 			// Si la pelota toca el borde en -max_z
 			z = -max_z + radio;
 			vz = -vz + r;
+			vx -= r;
 		}
 		if (max_x < x + radio) {
 			// Si la pelota toca el borde en max_x
 			x = max_x - radio;
 			vx = -vx + r;
+			vz -= r;
 		} else if (x - radio < -max_x) {
 			// Si la pelota toca el borde en -max_x
 			x = -max_x + radio;
 			vx = -vx + r;
+			vz -= r;
 		}
 
 		for (auto objeto: objetos->lista()) {
 			if (objeto->interseccionX(x, z, radio)) {
 				x -= dt * vx;
 				vx = -vx + r;
+				vz -= r;
 
 				if (dynamic_cast<Defensa*>(objeto))
 					objetos->borrar(objeto);
@@ -317,6 +321,7 @@ public:
 			if (objeto->interseccionZ(x, z, radio)) {
 				z -= dt * vz;
 				vz = -vz + r;
+				vx -= r;
 
 				if (dynamic_cast<Defensa*>(objeto))
 					objetos->borrar(objeto);
@@ -413,6 +418,7 @@ int main(int argc, char *argv[]) {
 	listaObjetos.agregar(new Defensa(8, -10));
 	listaObjetos.agregar(new Defensa(12, -10));
 	listaObjetos.agregar(&plataforma);
+	listaObjetos.agregar(&golero);
 
 	Pelota pelota(0, 0, 1, 12, 10, 15, 25, &listaObjetos);
 
