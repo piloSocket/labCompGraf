@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <cmath>
 #include <vector>
+#include <algorithm>
+#include <cstdlib>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>
 #else
@@ -220,72 +222,6 @@ public:
 	}
 };
 
-class Pelota {
-private:
-	float radio;
-	float x, z, vx, vz, max_x, max_z;
-	int display_list;
-	vector<Objeto *> objetos;
-public:
-	// vxi y vzi son las velocidades iniciales en x y en z.
-	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z, vector<Objeto *> objetos)
-		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z), objetos(objetos) {
-		display_list = glGenLists(1);
-
-		GLUquadric* q = gluNewQuadric();
-
-		glNewList(display_list, GL_COMPILE);
-		glPushMatrix();
-		glTranslatef(0, 1, 0);
-		gluSphere(q, radio, 30, 30);
-		glPopMatrix();
-		glEndList();
-
-		gluDeleteQuadric(q);
-	}
-
-	void mover(float dt) {
-		x += dt * vx;
-		z += dt * vz;
-
-		if (max_z < z + radio) {
-			// Si la pelota toca el borde en max_z, perdés
-			z = x = vx = vz = 0;
-		} else if (z - radio < -max_z) {
-			// Si la pelota toca el borde en -max_z
-			z = -max_z + radio;
-			vz = -vz;
-		}
-		if (max_x < x + radio) {
-			// Si la pelota toca el borde en max_x
-			x = max_x - radio;
-			vx = -vx;
-		} else if (x - radio < -max_x) {
-			// Si la pelota toca el borde en -max_x
-			x = -max_x + radio;
-			vx = -vx;
-		}
-
-		for (auto objeto: objetos) {
-			if (objeto->interseccionX(x, z, radio)) {
-				x -= dt * vx;
-				vx = -vx;
-			}
-			if (objeto->interseccionZ(x, z, radio)) {
-				z -= dt * vz;
-				vz = -vz;		
-			}
-		}
-	}
-
-	void dibujar() {
-		glPushMatrix();
-		glTranslatef(x, 0, z);
-		glCallList(display_list);
-		glPopMatrix();
-	}
-};
-
 class Defensa: public Objeto {
 public:
 	Defensa(float x, float z) {
@@ -301,6 +237,98 @@ public:
 		glNewList(display_list, GL_COMPILE);
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
+	}
+};
+
+class ListaObjetos {
+private:
+	vector<Objeto *> objetos;
+public:
+	ListaObjetos() {}
+
+	void agregar(Objeto *o) {
+		objetos.push_back(o);
+	}
+
+	void borrar(Objeto *o) {
+		objetos.erase(remove(objetos.begin(), objetos.end(), o), objetos.end());
+	}
+
+	vector<Objeto *> lista() {
+		return objetos;
+	}
+};
+
+class Pelota {
+private:
+	float radio;
+	float x, y, z, vx, vz, max_x, max_z;
+	int display_list;
+	ListaObjetos *objetos;
+public:
+	// vxi y vzi son las velocidades iniciales en x y en z.
+	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z, ListaObjetos *objetos)
+		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z), objetos(objetos) {
+		display_list = glGenLists(1);
+
+		GLUquadric* q = gluNewQuadric();
+		y = radio;
+
+		glNewList(display_list, GL_COMPILE);
+		glPushMatrix();
+		gluSphere(q, radio, 30, 30);
+		glPopMatrix();
+		glEndList();
+
+		gluDeleteQuadric(q);
+	}
+
+	void mover(float dt) {
+		x += dt * vx;
+		z += dt * vz;
+		float r = (float) rand() / RAND_MAX - 0.5f;
+
+		if (max_z < z + radio) {
+			// Si la pelota toca el borde en max_z, perdés
+			z = x = vx = vz = 0;
+		} else if (z - radio < -max_z) {
+			// Si la pelota toca el borde en -max_z
+			z = -max_z + radio;
+			vz = -vz + r;
+		}
+		if (max_x < x + radio) {
+			// Si la pelota toca el borde en max_x
+			x = max_x - radio;
+			vx = -vx + r;
+		} else if (x - radio < -max_x) {
+			// Si la pelota toca el borde en -max_x
+			x = -max_x + radio;
+			vx = -vx + r;
+		}
+
+		for (auto objeto: objetos->lista()) {
+			if (objeto->interseccionX(x, z, radio)) {
+				x -= dt * vx;
+				vx = -vx + r;
+
+				if (dynamic_cast<Defensa*>(objeto))
+					objetos->borrar(objeto);
+			}
+			if (objeto->interseccionZ(x, z, radio)) {
+				z -= dt * vz;
+				vz = -vz + r;
+
+				if (dynamic_cast<Defensa*>(objeto))
+					objetos->borrar(objeto);
+			}
+		}
+	}
+
+	void dibujar() {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+		glCallList(display_list);
+		glPopMatrix();
 	}
 };
 
@@ -375,24 +403,25 @@ int main(int argc, char *argv[]) {
 	Golero golero;
 
 	Plataforma plataforma(15);
-	vector<Objeto *> objetos = {
-		new Defensa(-12, -10),
-		new Defensa(-8, -10),
-		new Defensa(-4, -10),
-		new Defensa(0, -10),
-		new Defensa(4, -10),
-		new Defensa(8, -10),
-		new Defensa(12, -10),
-		&plataforma
-	};
-	Pelota pelota(0, 0, 1, 10, 10, 15, 25, objetos);
+	ListaObjetos listaObjetos;
+
+	listaObjetos.agregar(new Defensa(-12, -10));
+	listaObjetos.agregar(new Defensa(-8, -10));
+	listaObjetos.agregar(new Defensa(-4, -10));
+	listaObjetos.agregar(new Defensa(0, -10));
+	listaObjetos.agregar(new Defensa(4, -10));
+	listaObjetos.agregar(new Defensa(8, -10));
+	listaObjetos.agregar(new Defensa(12, -10));
+	listaObjetos.agregar(&plataforma);
+
+	Pelota pelota(0, 0, 1, 12, 10, 15, 25, &listaObjetos);
 
 	bool left = false, right = false;
 
 	Uint32 last = SDL_GetTicks();
 
 	//LOOP PRINCIPAL
-	do{
+	do {
 		Uint32 now = SDL_GetTicks();
 		float deltaTime = (now - last) / 1000.0f;
 		last = now;
@@ -460,7 +489,7 @@ int main(int argc, char *argv[]) {
 		if (left)
 			plataforma.mover(deltaTime, -1);
 
-		for (auto objeto : objetos)
+		for (auto objeto : listaObjetos.lista())
 			objeto->dibujar();
 
 		pelota.dibujar();
