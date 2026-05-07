@@ -4,6 +4,7 @@
 #include "FreeImage.h"
 #include <stdio.h>
 #include <cmath>
+#include <vector>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>
 #else
@@ -110,6 +111,44 @@ void dibujarCancha() {
 	glDisable(GL_TEXTURE_2D);
 }
 
+class Objeto {
+protected:
+	float x, y, z, ancho, largo, alto;
+	int display_list;
+
+public:
+	virtual ~Objeto() = default;
+
+	bool interseccionX(float x2, float z2, float radio) {
+		float dz = max(0.f, abs(z - z2) - ancho);
+
+	    // Distancia horizontal a cada cara lateral
+	    float dx_izq = abs((x - largo) - x2);
+	    float dx_der = abs((x + largo) - x2);
+
+	    // Intersecta si alcanza alguna de las dos caras y el z está en rango
+	    return (dx_izq * dx_izq + dz * dz <= radio * radio)
+	        || (dx_der * dx_der + dz * dz <= radio * radio);
+	}
+
+	bool interseccionZ(float x2, float z2, float radio) {
+	    float dx = max(0.f, abs(x - x2) - largo);
+
+	    float dz_frente = abs((z - ancho) - z2);
+	    float dz_atras  = abs((z + ancho) - z2);
+
+	    return (dx * dx + dz_frente * dz_frente <= radio * radio)
+	        || (dx * dx + dz_atras  * dz_atras  <= radio * radio);
+	}
+
+	void dibujar()  {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+		glCallList(display_list);
+		glPopMatrix();
+	}
+};
+
 class Golero {
 private:
 	float x, y, z;
@@ -145,19 +184,15 @@ public:
 		glPushMatrix();
 		glTranslatef(x, y, z);
 
-		
-
 		// Cuerpo del golero (ancho 2, alto 3, grosor 1)
 		dibujarCubo(2.0f, 3.0f, 1.0f);
 		glPopMatrix();
 	}
 };
 
-class Plataforma {
+class Plataforma: public Objeto {
 private:
-	float largo, alto, ancho;
-	float x, y, z, v, max_x;
-	int display_list;
+	float v, max_x;
 public:
 	explicit Plataforma(float max_x): max_x(max_x) {
 		display_list = glGenLists(1);
@@ -174,6 +209,7 @@ public:
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
 	}
+
 	float getX() const { return x; }
 	float getZ() const { return z; }
 
@@ -182,35 +218,6 @@ public:
 		x = min(x, max_x - largo / 2);
 		x = max(x, -max_x + largo / 2);
 	}
-
-	void dibujar()  {
-		glPushMatrix();
-		glTranslatef(x, y, z);
-		glCallList(display_list);
-		glPopMatrix();
-	}
-
-	bool interseccionX(float x2, float z2, float radio) {
-		float dz = max(0.f, abs(z - z2) - ancho);
-
-	    // Distancia horizontal a cada cara lateral
-	    float dx_izq = abs((x - largo) - x2);
-	    float dx_der = abs((x + largo) - x2);
-
-	    // Intersecta si alcanza alguna de las dos caras y el z está en rango
-	    return (dx_izq * dx_izq + dz * dz <= radio * radio)
-	        || (dx_der * dx_der + dz * dz <= radio * radio);
-	}
-
-	bool interseccionZ(float x2, float z2, float radio) {
-	    float dx = max(0.f, abs(x - x2) - largo);
-
-	    float dz_frente = abs((z - ancho) - z2);
-	    float dz_atras  = abs((z + ancho) - z2);
-
-	    return (dx * dx + dz_frente * dz_frente <= radio * radio)
-	        || (dx * dx + dz_atras  * dz_atras  <= radio * radio);
-	}
 };
 
 class Pelota {
@@ -218,11 +225,11 @@ private:
 	float radio;
 	float x, z, vx, vz, max_x, max_z;
 	int display_list;
-	Plataforma *plataforma;
+	vector<Objeto *> objetos;
 public:
 	// vxi y vzi son las velocidades iniciales en x y en z.
-	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z, Plataforma *p)
-		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z), plataforma(p) {
+	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z, vector<Objeto *> objetos)
+		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z), objetos(objetos) {
 		display_list = glGenLists(1);
 
 		GLUquadric* q = gluNewQuadric();
@@ -259,15 +266,15 @@ public:
 			vx = -vx;
 		}
 
-		if (plataforma->interseccionX(x, z, radio)) {
-			x -= dt * vx;
-			vx = -vx;
-			cout << "IX" << endl;
-		}
-		if (plataforma->interseccionZ(x, z, radio)) {
-			z -= dt * vz;
-			vz = -vz;
-			cout << "IZ" << endl;
+		for (auto objeto: objetos) {
+			if (objeto->interseccionX(x, z, radio)) {
+				x -= dt * vx;
+				vx = -vx;
+			}
+			if (objeto->interseccionZ(x, z, radio)) {
+				z -= dt * vz;
+				vz = -vz;		
+			}
 		}
 	}
 
@@ -279,30 +286,21 @@ public:
 	}
 };
 
-class Defensa {
-private:
-	float largo, alto, ancho;
-	float x, y, z;
-	int display_list;
+class Defensa: public Objeto {
 public:
-	Defensa(float x, float z): x(x), z(z) {
+	Defensa(float x, float z) {
 		display_list = glGenLists(1);
 
 		largo = 3;
 		alto = 1;
 		ancho = 1;
+		this->x = x;
+		this->z = z;
 		y = alto / 2;
 
 		glNewList(display_list, GL_COMPILE);
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
-	}
-
-	void dibujar() {
-		glPushMatrix();
-		glTranslatef(x, y, z);
-		glCallList(display_list);
-		glPopMatrix();
 	}
 };
 
@@ -377,14 +375,17 @@ int main(int argc, char *argv[]) {
 	Golero golero;
 
 	Plataforma plataforma(15);
-	Defensa d1(-12, -10),
-			d2(-8, -10),
-			d3(-4, -10),
-			d4(0, -10),
-			d5(4, -10),
-			d6(8, -10),
-			d7(12, -10);
-	Pelota pelota(0, 0, 1, 10, 10, 15, 25, &plataforma);
+	vector<Objeto *> objetos = {
+		new Defensa(-12, -10),
+		new Defensa(-8, -10),
+		new Defensa(-4, -10),
+		new Defensa(0, -10),
+		new Defensa(4, -10),
+		new Defensa(8, -10),
+		new Defensa(12, -10),
+		&plataforma
+	};
+	Pelota pelota(0, 0, 1, 10, 10, 15, 25, objetos);
 
 	bool left = false, right = false;
 
@@ -458,14 +459,10 @@ int main(int argc, char *argv[]) {
 			plataforma.mover(deltaTime, 1);
 		if (left)
 			plataforma.mover(deltaTime, -1);
-		plataforma.dibujar();
-		d1.dibujar();
-		d2.dibujar();
-		d3.dibujar();
-		d4.dibujar();
-		d5.dibujar();
-		d6.dibujar();
-		d7.dibujar();
+
+		for (auto objeto : objetos)
+			objeto->dibujar();
+
 		pelota.dibujar();
 		golero.dibujar();
 
