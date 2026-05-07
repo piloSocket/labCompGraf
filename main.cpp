@@ -116,7 +116,48 @@ void dibujarPelota() {
 	gluSphere(gluNewQuadric(), 1, 30, 30);
 	glPopMatrix();
 }
+class Golero {
+private:
+	float x, y, z;
+	float velocidad;
+	int direccion; // 1 = Derecha, -1 = Izquierda
+	const float limite = 4.5f; // El arco mide 12, el golero se mueve en este rango
 
+public:
+	Golero() {
+		x = 0.0f;
+		y = 1.5f;    // Altura media para que toque el suelo
+		z = -24.0f;  // Un poquito adelante del arco (que está en -25)
+		velocidad = 8.0f;
+		direccion = 1;
+	}
+
+	void actualizar(float dt) {
+		// Movimiento lineal
+		x += velocidad * dt * direccion;
+
+		// Si toca los límites del arco, cambia de dirección
+		if (x >= limite) {
+			x = limite;
+			direccion = -1;
+		}
+		else if (x <= -limite) {
+			x = -limite;
+			direccion = 1;
+		}
+	}
+
+	void dibujar() {
+		glPushMatrix();
+		glTranslatef(x, y, z);
+
+		
+
+		// Cuerpo del golero (ancho 2, alto 3, grosor 1)
+		dibujarCubo(2.0f, 3.0f, 1.0f);
+		glPopMatrix();
+	}
+};
 class Defensa {
 private:
 	int display_list;
@@ -250,6 +291,9 @@ int main(int argc, char *argv[]) {
 	GLfloat colorLuz[4] = { 1, 1, 1, 1 };
 	//FIN INICIALIZACION
 	bool textOn = true;
+	Golero golero;
+
+
 
 	Plataforma plataforma(15);
 	Defensa d1(-12, -10),
@@ -270,6 +314,7 @@ int main(int argc, char *argv[]) {
 		float deltaTime = (now - last) / 1000.0f;
 		last = now;
 		
+		golero.actualizar(deltaTime);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
@@ -327,7 +372,7 @@ int main(int argc, char *argv[]) {
 
 		luzAmbiente(1, 1, 1);
 		dibujarCancha();
-
+		golero.dibujar();
 		dibujarPelota();
 
 		if (right)
