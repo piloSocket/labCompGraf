@@ -456,13 +456,10 @@ public:
 			float nx = vx * cos_a - vz * sin_a;
 			float nz = vx * sin_a + vz * cos_a;
 
-			if (nx * vx <= 0 || nz * vz <= 0) {
-				nx = vx * sin_a + vz * cos_a;
-				nz = vx * cos_a - vz * sin_a;
+			if (nx * vx >= 0 && nz * vz >= 0) {
+				vx = nx;
+				vz = nz;
 			}
-
-			vx = nx;
-			vz = nz;
 		}
 	}
 
