@@ -7,15 +7,22 @@
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
+#include <string>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>
+#include <SDL2/SDL_ttf.h>
 #else
 #include <conio.h>
+#include "SDL_ttf.h"
 #include <GL/glu.h>
 #endif
 
 using namespace std;
 GLuint textura;
+
+// Globales para el HUD
+TTF_Font* fuenteHUD = nullptr;
+Uint32 tiempoInicio;
 
 enum ModoCamara { ORIGINAL, PERSONAJE, LIBRE };
 ModoCamara vistaActual = ORIGINAL;
@@ -462,6 +469,34 @@ public:
 	}
 };
 
+void renderTexto(string texto, int x, int y) {
+	if (!fuenteHUD || texto.empty()) return;
+
+	SDL_Color blanco = { 255, 255, 255, 255 };
+	SDL_Surface* surface = TTF_RenderText_Blended(fuenteHUD, texto.c_str(), blanco);
+
+	GLuint texturaTexto;
+	glGenTextures(1, &texturaTexto);
+	glBindTexture(GL_TEXTURE_2D, texturaTexto);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, surface->pixels);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glEnable(GL_TEXTURE_2D);
+	glBegin(GL_QUADS);
+	glTexCoord2f(0, 1); glVertex2i(x, y);
+	glTexCoord2f(1, 1); glVertex2i(x + surface->w, y);
+	glTexCoord2f(1, 0); glVertex2i(x + surface->w, y + surface->h);
+	glTexCoord2f(0, 0); glVertex2i(x, y + surface->h);
+	glEnd();
+	glDisable(GL_TEXTURE_2D);
+
+	glDeleteTextures(1, &texturaTexto);
+	SDL_FreeSurface(surface);
+}
+
 int main(int argc, char *argv[]) {
 	srand(time(NULL));
 	//INICIALIZACION
@@ -469,6 +504,19 @@ int main(int argc, char *argv[]) {
 		cerr << "No se pudo iniciar SDL: " << SDL_GetError() << endl;
 		exit(1);
 	}
+
+	// 1. Inicializar SDL_ttf
+	if (TTF_Init() == -1) {
+		cout << "Error SDL_ttf: " << TTF_GetError() << endl;
+	}
+
+	// 2. Cargar la fuente (Asegúrate que el archivo .ttf esté en la carpeta del proyecto)
+	fuenteHUD = TTF_OpenFont("arial.ttf", 24);
+	if (!fuenteHUD) {
+		cout << "No se encontró el archivo arial.ttf!" << endl;
+	}
+
+	tiempoInicio = SDL_GetTicks();
 
 	SDL_Window* win = SDL_CreateWindow("Lab 1 Comp. Grafica, Juan Andres Olmedo y Francisco Piloni",
 		SDL_WINDOWPOS_CENTERED,
@@ -532,6 +580,7 @@ int main(int argc, char *argv[]) {
 	//FIN INICIALIZACION
 	bool textOn = true;
 	Golero golero;
+	Puntaje *puntaje = Puntaje::getInstance();
 
 	Plataforma plataforma(13);
 	ListaObjetos *listaObjetos = ListaObjetos::getInstance();
@@ -562,6 +611,33 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
+		// --- INICIO DIBUJO HUD ---
+		glDisable(GL_LIGHTING); // El HUD no necesita luces
+
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadIdentity();
+		gluOrtho2D(0, 1000, 0, 700); // Proyección 2D (ancho y alto de tu ventana)
+
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+
+		glDisable(GL_DEPTH_TEST); // Para que el HUD siempre esté arriba
+
+		// Dibujar contenido
+		int segundos = (SDL_GetTicks() - tiempoInicio) / 1000;
+		renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660);
+		renderTexto("Tiempo: " + to_string(segundos) + "s", 850, 660);
+
+		glEnable(GL_DEPTH_TEST);
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glPopMatrix();
+
+		glEnable(GL_LIGHTING);
+		// --- FIN DIBUJO HUD ---
 
 		// Actualizar posición de la cámara
 		float yaw_rad   = yaw   * M_PI / 180.0f;
