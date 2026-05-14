@@ -113,6 +113,43 @@ void dibujarCancha() {
 	glDisable(GL_TEXTURE_2D);
 }
 
+class Puntaje {
+private:
+	int goles;
+	int fueras;
+	static Puntaje *puntaje;
+
+	Puntaje() {
+		goles = fueras = 0;
+	}
+public:
+	static Puntaje *getInstance() {
+        if (puntaje == nullptr)
+        	puntaje = new Puntaje;
+        return puntaje;
+    }
+
+	void gol() {
+		goles++;
+		cout << "Goles: " << goles << endl;
+	}
+
+	void fuera() {
+		fueras++;
+		cout << "Fueras: " << fueras << endl;
+	}
+
+	int getGoles() {
+		return goles;
+	}
+
+	int getFueras() {
+		return fueras;
+	}
+};
+
+Puntaje *Puntaje::puntaje = nullptr;
+
 class Objeto {
 protected:
 	float x, y, z, ancho, largo, alto, vx, vz;
@@ -301,12 +338,14 @@ private:
 	float v_inicial;
 	int display_list;
 	ListaObjetos *objetos;
+	Puntaje *puntaje;
 public:
 	// vxi y vzi son las velocidades iniciales en x y en z.
 	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z)
 		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z) {
 		display_list = glGenLists(1);
 		objetos = ListaObjetos::getInstance();
+		puntaje = Puntaje::getInstance();
 
 		GLUquadric* q = gluNewQuadric();
 		y = radio;
@@ -320,19 +359,20 @@ public:
 
 		gluDeleteQuadric(q);
 	}
+
 	void reset() {
 		x = 0;
 		z = 0;
-		// Reiniciamos con la velocidad original pero con un ángulo ligeramente aleatorio
+		// Reiniciamos con la velocidad original pero con un ángulo aleatorio
 		// para que no sea siempre igual al sacar
 		float angulo_aleatorio = ((rand() % 60) - 30) * M_PI / 180.0f; // entre -30 y 30 grados
 		vx = v_inicial * sin(angulo_aleatorio);
 		vz = v_inicial * cos(angulo_aleatorio);
 
-		// Aseguramos que siempre salga hacia adelante (hacia el arco) o hacia atrás
-		// En este caso, vz positivo va hacia la plataforma, negativo hacia el arco.
-		if (vz > 0) vz = -vz;
+		// Aseguramos que siempre salga hacia la plataforma
+		if (vz < 0) vz = -vz;
 	}
+
 	void mover(float dt) {
 		x += dt * vx;
 		z += dt * vz;
@@ -340,27 +380,24 @@ public:
 
 		// --- DETECCIÓN DE GOL ---
 		// El arco está en z = -25 y mide 12 de largo (de -6 a 6 en x)
-		if (z - radio < -24.5f) {
+		if (z - radio < -max_z) {
 			if (x > -6.0f && x < 6.0f) {
-				cout << "¡GOOOOOL!" << endl;
+				puntaje->gol();
 				reset();
 				return; // Salimos de la función para no procesar rebotes este frame
-			}
-			else {
+			} else {
 				// Si toca la línea de fondo pero NO es gol, rebota
 				z = -max_z + radio;
 				vz = -vz;
 				interseccion = true;
 			}
 		}
-		// --- LÍMITE TRASERO (Perder) ---
+		// Se cruza el límite de atrás de la plataforma
 		if (z + radio > max_z) {
-			cout << "Pelota perdida. Reiniciando..." << endl;
+			puntaje->fuera();
 			reset();
 			return;
 		}
-
-
 
 		if (max_z < z + radio) {
 			// Si la pelota toca el borde en max_z, perdés
@@ -387,13 +424,16 @@ public:
 		for (auto objeto: objetos->lista()) {
 			bool inter_objeto = false;
 
-			if (objeto->interseccionX(x, z, radio)) {
+			// Las intersecciones son válidas solo si la pelota va en dirección opuesta
+			// a la normal de la superficie (que se aproxima como (x - objetoX) o
+			// (z - objetoZ))
+			if (objeto->interseccionX(x, z, radio) && vx * (x - objeto->getX()) <= 0) {
 				x -= dt * vx;
 				x += dt * objeto->getVelocidadX();
 				vx = -vx;
 				inter_objeto = interseccion = true;
 			}
-			if (objeto->interseccionZ(x, z, radio)) {
+			if (objeto->interseccionZ(x, z, radio) && vz * (z - objeto->getZ()) <= 0) {
 				z -= dt * vz;
 				vz = -vz;
 				inter_objeto = interseccion = true;
@@ -407,7 +447,7 @@ public:
 
 		// Si hubo una intersección, generar un cambio de ángulo chico aleatorio
 		// para que el juego no sea siempre igual.
-		if (interseccion) {
+		if (interseccion && false) {
 			float a = 0.2 * (float) rand() / RAND_MAX - 0.1;
 
 			float cos_a = cos(a);
@@ -590,8 +630,10 @@ int main(int argc, char *argv[]) {
 
 		if (right)
 			plataforma.mover(deltaTime, 1);
-		if (left)
+		else if (left)
 			plataforma.mover(deltaTime, -1);
+		else
+			plataforma.mover(deltaTime, 0);
 
 		for (auto objeto : listaObjetos->lista())
 			objeto->dibujar();
