@@ -52,7 +52,7 @@ void dibujarCubo(float w, float h, float d) {
 	glEnd();
 }
 
-void dibujarCuboconTextura(float w, float h, float d) {
+void dibujarCuadradoconTextura(float w, float h, float d) {
 	float x = w / 2.0f, y = h / 2.0f, z = d / 2.0f;
 
 	glBegin(GL_QUADS);
@@ -62,16 +62,6 @@ void dibujarCuboconTextura(float w, float h, float d) {
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y, -z);  // Abajo-Derecha de la foto
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y, z);   // Arriba-Derecha de la foto
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(-x, y, z);  // Arriba-Izquierda de la foto
-	// Back
-	glNormal3f(0, 0, -1); glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z); glVertex3f(x, y, -z); glVertex3f(x, -y, -z);
-	// Top
-	glNormal3f(0, 1, 0); glVertex3f(-x, y, -z); glVertex3f(-x, y, z); glVertex3f(x, y, z); glVertex3f(x, y, -z);
-	// Bottom
-	glNormal3f(0, -1, 0); glVertex3f(-x, -y, -z); glVertex3f(x, -y, -z); glVertex3f(x, -y, z); glVertex3f(-x, -y, z);
-	// Right
-	glNormal3f(1, 0, 0); glVertex3f(x, -y, -z); glVertex3f(x, y, -z); glVertex3f(x, y, z); glVertex3f(x, -y, z);
-	// Left
-	glNormal3f(-1, 0, 0); glVertex3f(-x, -y, -z); glVertex3f(-x, -y, z); glVertex3f(-x, y, z); glVertex3f(-x, y, -z);
 	glEnd();
 }
 
@@ -107,7 +97,7 @@ void dibujarCancha() {
 
 	glPushMatrix();
 	glTranslatef(0, -0.2, 0);
-	dibujarCuboconTextura(30, 0.4, 50); // 3. Dibujo
+	dibujarCuadradoconTextura(30, 0.4, 50); // 3. Dibujo
 	glPopMatrix();
 
 	glDisable(GL_TEXTURE_2D);
@@ -335,7 +325,6 @@ class Pelota {
 private:
 	float radio;
 	float x, y, z, vx, vz, max_x, max_z;
-	float v_inicial;
 	int display_list;
 	ListaObjetos *objetos;
 	Puntaje *puntaje;
@@ -349,10 +338,10 @@ public:
 
 		GLUquadric* q = gluNewQuadric();
 		y = radio;
-		v_inicial = sqrt(vx * vx + vz * vz);
 
 		glNewList(display_list, GL_COMPILE);
 		glPushMatrix();
+		// Una esfera con el radio configurado.
 		gluSphere(q, radio, 30, 30);
 		glPopMatrix();
 		glEndList();
@@ -366,8 +355,10 @@ public:
 		// Reiniciamos con la velocidad original pero con un ángulo aleatorio
 		// para que no sea siempre igual al sacar
 		float angulo_aleatorio = ((rand() % 60) - 30) * M_PI / 180.0f; // entre -30 y 30 grados
-		vx = v_inicial * sin(angulo_aleatorio);
-		vz = v_inicial * cos(angulo_aleatorio);
+
+		float v = sqrt(vx * vx + vz * vz);
+		vx = v * sin(angulo_aleatorio);
+		vz = v * cos(angulo_aleatorio);
 
 		// Aseguramos que siempre salga hacia la plataforma
 		if (vz < 0) vz = -vz;
@@ -379,7 +370,7 @@ public:
 		bool interseccion = false;
 
 		// --- DETECCIÓN DE GOL ---
-		// El arco está en z = -25 y mide 12 de largo (de -6 a 6 en x)
+		// El arco está en z = -max_z y mide 12 de largo (de -6 a 6 en x)
 		if (z - radio < -max_z) {
 			if (x > -6.0f && x < 6.0f) {
 				puntaje->gol();
