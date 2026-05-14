@@ -263,6 +263,7 @@ class Pelota {
 private:
 	float radio;
 	float x, y, z, vx, vz, max_x, max_z;
+	float v_inicial;
 	int display_list;
 	ListaObjetos *objetos;
 public:
@@ -273,6 +274,7 @@ public:
 
 		GLUquadric* q = gluNewQuadric();
 		y = radio;
+		v_inicial = sqrt(vx * vx + vz * vz);
 
 		glNewList(display_list, GL_COMPILE);
 		glPushMatrix();
@@ -282,11 +284,47 @@ public:
 
 		gluDeleteQuadric(q);
 	}
+	void reset() {
+		x = 0;
+		z = 0;
+		// Reiniciamos con la velocidad original pero con un ángulo ligeramente aleatorio
+		// para que no sea siempre igual al sacar
+		float angulo_aleatorio = ((rand() % 60) - 30) * M_PI / 180.0f; // entre -30 y 30 grados
+		vx = v_inicial * sin(angulo_aleatorio);
+		vz = v_inicial * cos(angulo_aleatorio);
 
+		// Aseguramos que siempre salga hacia adelante (hacia el arco) o hacia atrás
+		// En este caso, vz positivo va hacia la plataforma, negativo hacia el arco.
+		if (vz > 0) vz = -vz;
+	}
 	void mover(float dt) {
 		x += dt * vx;
 		z += dt * vz;
 		bool interseccion = false;
+
+		// --- DETECCIÓN DE GOL ---
+		// El arco está en z = -25 y mide 12 de largo (de -6 a 6 en x)
+		if (z - radio < -24.5f) {
+			if (x > -6.0f && x < 6.0f) {
+				cout << "¡GOOOOOL!" << endl;
+				reset();
+				return; // Salimos de la función para no procesar rebotes este frame
+			}
+			else {
+				// Si toca la línea de fondo pero NO es gol, rebota
+				z = -max_z + radio;
+				vz = -vz;
+				interseccion = true;
+			}
+		}
+		// --- LÍMITE TRASERO (Perder) ---
+		if (z + radio > max_z) {
+			cout << "Pelota perdida. Reiniciando..." << endl;
+			reset();
+			return;
+		}
+
+
 
 		if (max_z < z + radio) {
 			// Si la pelota toca el borde en max_z, perdés
@@ -351,6 +389,7 @@ public:
 };
 
 int main(int argc, char *argv[]) {
+	srand(time(NULL));
 	//INICIALIZACION
 	if (SDL_Init(SDL_INIT_VIDEO)<0) {
 		cerr << "No se pudo iniciar SDL: " << SDL_GetError() << endl;
