@@ -20,7 +20,7 @@ GLuint textura;
 enum ModoCamara { ORIGINAL, PERSONAJE, LIBRE };
 ModoCamara vistaActual = ORIGINAL;
 
-float pitch = 0.0f, yaw = -90.0f;
+float pitch = 16.7f, yaw = 0, radio = sqrt(50 * 50 + 15 * 15);
 float camX = 0, camY = 15, camZ = 50;
 
 void luzDifusa(float r, float g, float b) {
@@ -533,7 +533,7 @@ int main(int argc, char *argv[]) {
 	bool textOn = true;
 	Golero golero;
 
-	Plataforma plataforma(15);
+	Plataforma plataforma(13);
 	ListaObjetos *listaObjetos = ListaObjetos::getInstance();
 
 	listaObjetos->agregar(new Defensa(-12, -10));
@@ -562,11 +562,15 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
-		// --- CALCULO VECTORES DE CÁMARA ---
-		float lookX = cos(yaw * M_PI / 180.0f) * cos(pitch * M_PI / 180.0f);
-		float lookY = sin(pitch * M_PI / 180.0f);
-		float lookZ = sin(yaw * M_PI / 180.0f) * cos(pitch * M_PI / 180.0f);
-		
+
+		// Actualizar posición de la cámara
+		float yaw_rad   = yaw   * M_PI / 180.0f;
+		float pitch_rad = pitch * M_PI / 180.0f;
+
+		camX = radio * cos(pitch_rad) * sin(yaw_rad);
+		camY = radio * sin(pitch_rad);
+		camZ = radio * cos(pitch_rad) * cos(yaw_rad);
+
 		// --- APLICAR MODO DE CAMARA ---
 		float platX = plataforma.getX();
 		float platZ = plataforma.getZ();
@@ -578,14 +582,14 @@ int main(int argc, char *argv[]) {
 			break;
 
 		case PERSONAJE:
-			gluLookAt(platX, 5, platZ + 10,
-				platX + lookX, 5 + lookY, (platZ + 8) + lookZ,
+			gluLookAt(platX, 5, platZ + 15,
+				platX, 5, platZ,
 				0, 1, 0);
 			break;
 
 		case LIBRE:
 			gluLookAt(camX, camY, camZ,
-				camX + lookX, camY + lookY, camZ + lookZ,
+				0, 0, 0,
 				0, 1, 0);
 			break;
 		}
@@ -641,31 +645,26 @@ int main(int argc, char *argv[]) {
 				// IMPORTANTE: Solo rotamos si es modo LIBRE
 				if (vistaActual == LIBRE) {
 					if (evento.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-						// Paneo con click derecho
-						float panSpeed = 0.05f;
-						float rightX = sin(yaw * M_PI / 180.0f);
-						float rightZ = -cos(yaw * M_PI / 180.0f);
-						camX += -evento.motion.xrel * rightX * panSpeed;
-						camZ += -evento.motion.xrel * rightZ * panSpeed;
-						camY += evento.motion.yrel * panSpeed;
-					}
-					else {
-						// Rotación normal
-						float sensibilidad = 0.2f;
-						yaw += evento.motion.xrel * sensibilidad;
-						pitch -= evento.motion.yrel * sensibilidad;
-						if (pitch > 89.0f) pitch = 89.0f;
-						if (pitch < -89.0f) pitch = -89.0f;
+					    // Zoom con click derecho (opcional, o usá rueda del mouse)
+					    radio += evento.motion.yrel * 0.05f;
+					    if (radio < 0.5f) radio = 0.5f;
+					} else {
+					    // Órbita
+					    float sensibilidad = 0.2f;
+					    // Mantener yaw entre -90 y 90, y el pitch mayor a 10
+					    yaw = clamp(yaw + evento.motion.xrel * sensibilidad, -90.f, 90.f);
+					    pitch = max(pitch - evento.motion.yrel * sensibilidad, 10.f);
+					    if (pitch >  89.0f) pitch =  89.0f;
+					    if (pitch < -89.0f) pitch = -89.0f;
 					}
 				}
 				break;
 
 			case SDL_MOUSEWHEEL:
 				if (vistaActual == LIBRE) {
-					float scrollSpeed = 3.0f;
-					camX += lookX * evento.wheel.y * scrollSpeed;
-					camY += lookY * evento.wheel.y * scrollSpeed;
-					camZ += lookZ * evento.wheel.y * scrollSpeed;
+					float scrollSpeed = .5f;
+					// Mantener el radio entre 5 y 70
+					radio = clamp(radio - evento.wheel.y * scrollSpeed, 10.f, 70.f);
 				}
 				break;
 
