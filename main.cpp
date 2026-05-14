@@ -447,7 +447,7 @@ public:
 
 		// Si hubo una intersección, generar un cambio de ángulo chico aleatorio
 		// para que el juego no sea siempre igual.
-		if (interseccion && false) {
+		if (interseccion) {
 			float a = 0.2 * (float) rand() / RAND_MAX - 0.1;
 
 			float cos_a = cos(a);
