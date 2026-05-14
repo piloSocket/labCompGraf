@@ -653,11 +653,9 @@ int main(int argc, char *argv[]) {
 	do {
 		Uint32 now = SDL_GetTicks();
 		float deltaTime = (now - last) / 1000.0f;
-		last = now;
 		
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
-
 
 		// Actualizar posición de la cámara
 		float yaw_rad   = yaw   * M_PI / 180.0f;
@@ -715,15 +713,15 @@ int main(int argc, char *argv[]) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		}
 
-		dibujarArco();
-
-		luzAmbiente(1, 1, 1);
 		if (texturas) {
 			glEnable(GL_TEXTURE_2D);
 			dibujarCancha(textura);
 			glDisable(GL_TEXTURE_2D);
 		} else 
 			dibujarCancha(textura);
+
+		dibujarArco();
+		luzAmbiente(1, 1, 1);
 
 		if (!pausa) {
 			pelota.mover(deltaTime);
@@ -747,6 +745,7 @@ int main(int argc, char *argv[]) {
 		// --- INICIO DIBUJO HUD ---
 		glDisable(GL_LIGHTING); 
 		glDisable(GL_DEPTH_TEST);// El HUD no necesita luces
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 		glMatrixMode(GL_PROJECTION);
 		glPushMatrix();
@@ -760,7 +759,11 @@ int main(int argc, char *argv[]) {
 		glColor3f(1.0f, 1.0f, 1.0f);
 
 		// Dibujar contenido
-		int segundos = (SDL_GetTicks() - tiempoInicio) / 1000;
+		if (pausa) {
+			tiempoInicio = tiempoInicio + (now - last);
+			renderTexto("Pausa", 450, 660);
+		}
+		int segundos = (now - tiempoInicio) / 1000;
 		renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660);
 		renderTexto("Tiempo: " + to_string(segundos) + "s", 850, 660);
 
@@ -853,6 +856,8 @@ int main(int argc, char *argv[]) {
 			}
 		}
 		SDL_GL_SwapWindow(win);
+
+		last = now;
 	} while (!fin);
 
 	//FIN LOOP PRINCIPAL
