@@ -18,7 +18,6 @@
 #endif
 
 using namespace std;
-GLuint textura;
 
 // Globales para el HUD
 TTF_Font* fuenteHUD = nullptr;
@@ -59,27 +58,15 @@ void dibujarCubo(float w, float h, float d) {
 	glEnd();
 }
 
-void dibujarCuadrado(float w, float y, float d) {
-	float x = w / 2.0f, z = d / 2.0f;
-
-	glBegin(GL_QUADS);
-	glNormal3f(0, 1, 0);
-	glVertex3f(-x, y, -z);
-	glVertex3f(x, y, -z);
-	glVertex3f(x, y, z);
-	glVertex3f(-x, y, z);
-	glEnd();
-}
-
 void dibujarCuadradoconTextura(float w, float y, float d) {
 	float x = w / 2.0f, z = d / 2.0f;
 
 	glBegin(GL_QUADS);
 	glNormal3f(0, 1, 0);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(-x, y, -z); // Abajo-Izquierda de la foto
-	glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y, -z);  // Abajo-Derecha de la foto
-	glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y, z);   // Arriba-Derecha de la foto
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(-x, y, z);  // Arriba-Izquierda de la foto
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(x, y, z);   // Arriba-Derecha de la foto
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y, -z);  // Abajo-Derecha de la foto
 	glEnd();
 }
 
@@ -109,12 +96,11 @@ void dibujarArco() {
 	glPopMatrix();
 }
 
-void dibujarCancha() {
+void dibujarCancha(GLuint textura) {
 	glBindTexture(GL_TEXTURE_2D, textura);
 
 	glPushMatrix();
-	glTranslatef(0, -0.2, 0);
-	dibujarCuadradoconTextura(30, 0.4, 50);
+	dibujarCuadradoconTextura(30, 0, 50);
 	glPopMatrix();
 
 	glDisable(GL_TEXTURE_2D);
@@ -359,7 +345,7 @@ public:
 		glNewList(display_list, GL_COMPILE);
 		glPushMatrix();
 		// Una esfera con el radio configurado.
-		gluSphere(q, radio, 30, 30);
+		gluSphere(q, radio, 20, 20);
 		glPopMatrix();
 		glEndList();
 
@@ -559,6 +545,7 @@ int main(int argc, char *argv[]) {
 	void* datos = FreeImage_GetBits(bitmap);
 	//FIN CARGAR IMAGEN
 
+	GLuint textura;
 	glGenTextures(1, &textura);
 	glBindTexture(GL_TEXTURE_2D, textura);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -612,6 +599,9 @@ int main(int argc, char *argv[]) {
 	bool left = false, right = false;
 
 	Uint32 last = SDL_GetTicks();
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
 
 	//LOOP PRINCIPAL
 	do {
@@ -711,10 +701,10 @@ int main(int argc, char *argv[]) {
 		luzAmbiente(1, 1, 1);
 		if (texturas) {
 			glEnable(GL_TEXTURE_2D);
-			dibujarCancha();
+			dibujarCancha(textura);
 			glDisable(GL_TEXTURE_2D);
 		} else 
-			dibujarCancha();
+			dibujarCancha(textura);
 
 		if (!pausa) {
 			pelota.mover(deltaTime);
