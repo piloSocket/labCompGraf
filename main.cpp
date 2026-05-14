@@ -115,11 +115,35 @@ void dibujarCancha() {
 
 class Objeto {
 protected:
-	float x, y, z, ancho, largo, alto;
+	float x, y, z, ancho, largo, alto, vx, vz;
 	int display_list;
 
 public:
 	virtual ~Objeto() = default;
+
+	float getX() {
+		return x;
+	}
+
+	float getZ() {
+		return z;
+	}
+
+	float getVelocidadX() {
+		return vx;
+	}
+
+	float getVelocidadZ() {
+		return vz;
+	}
+
+	float getLargo() {
+		return largo;
+	}
+
+	float getAncho() {
+		return ancho;
+	}
 
 	bool interseccionX(float x2, float z2, float radio) {
 		float dz = max(0.f, abs(z - z2) - ancho / 2);
@@ -165,7 +189,8 @@ public:
 		largo = 2.0;
 		alto = 3.0;
 		ancho = 1.0;
-		velocidad = 8.0f;
+		vx = velocidad = 8.0f;
+		vz = 0;
 		direccion = 1;
 
 		display_list = glGenLists(1);
@@ -188,6 +213,7 @@ public:
 			x = -limite;
 			direccion = 1;
 		}
+		vx = velocidad * direccion;
 	}
 };
 
@@ -204,20 +230,19 @@ public:
 		x = 0;
 		y = alto / 2;
 		z = 22;
-		v = 15;
+		vx = v = 15;
+		vz = 0;
 
 		glNewList(display_list, GL_COMPILE);
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
 	}
 
-	float getX() const { return x; }
-	float getZ() const { return z; }
-
 	void mover(float dt, float direccion) {
 		x += v * dt * direccion;
 		x = min(x, max_x - largo / 2);
 		x = max(x, -max_x + largo / 2);
+		vx = v * direccion;
 	}
 };
 
@@ -232,6 +257,7 @@ public:
 		this->x = x;
 		this->z = z;
 		y = alto / 2;
+		vx = vz = 0;
 
 		glNewList(display_list, GL_COMPILE);
 		dibujarCubo(largo, alto, ancho);
@@ -242,8 +268,15 @@ public:
 class ListaObjetos {
 private:
 	vector<Objeto *> objetos;
-public:
+	static ListaObjetos *listaObjetos;
+
 	ListaObjetos() {}
+public:
+	static ListaObjetos *getInstance() {
+        if (listaObjetos == nullptr)
+        	listaObjetos = new ListaObjetos;
+        return listaObjetos;
+    }
 
 	void agregar(Objeto *o) {
 		objetos.push_back(o);
@@ -259,6 +292,8 @@ public:
 	}
 };
 
+ListaObjetos *ListaObjetos::listaObjetos = nullptr;
+
 class Pelota {
 private:
 	float radio;
@@ -267,9 +302,10 @@ private:
 	ListaObjetos *objetos;
 public:
 	// vxi y vzi son las velocidades iniciales en x y en z.
-	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z, ListaObjetos *objetos)
-		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z), objetos(objetos) {
+	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z)
+		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z) {
 		display_list = glGenLists(1);
+		objetos = ListaObjetos::getInstance();
 
 		GLUquadric* q = gluNewQuadric();
 		y = radio;
@@ -290,7 +326,7 @@ public:
 
 		if (max_z < z + radio) {
 			// Si la pelota toca el borde en max_z, perdés
-			z = x = vx = vz = 0;
+			z = x = 0;
 			interseccion = true;
 		} else if (z - radio < -max_z) {
 			// Si la pelota toca el borde en -max_z
@@ -311,34 +347,44 @@ public:
 		}
 
 		for (auto objeto: objetos->lista()) {
+			bool inter_objeto = false;
+
 			if (objeto->interseccionX(x, z, radio)) {
 				x -= dt * vx;
+				x += dt * objeto->getVelocidadX();
 				vx = -vx;
-				interseccion = true;
-
-				if (dynamic_cast<Defensa*>(objeto))
-					objetos->borrar(objeto);
+				inter_objeto = interseccion = true;
 			}
 			if (objeto->interseccionZ(x, z, radio)) {
 				z -= dt * vz;
 				vz = -vz;
-				interseccion = true;
+				inter_objeto = interseccion = true;
+			}
 
-				if (dynamic_cast<Defensa*>(objeto))
-					objetos->borrar(objeto);
+			if (inter_objeto && dynamic_cast<Defensa*>(objeto)) {
+				objetos->borrar(objeto);
+				break;
 			}
 		}
 
 		// Si hubo una intersección, generar un cambio de ángulo chico aleatorio
 		// para que el juego no sea siempre igual.
 		if (interseccion) {
-			float a = 0.3 * (float) rand() / RAND_MAX - 0.15;
+			float a = 0.2 * (float) rand() / RAND_MAX - 0.1;
 
 			float cos_a = cos(a);
 			float sin_a = sin(a);
 
-			vx = vx * cos_a - vz * sin_a;
-			vz = vx * sin_a + vz * cos_a;
+			float nx = vx * cos_a - vz * sin_a;
+			float nz = vx * sin_a + vz * cos_a;
+
+			if (nx * vx <= 0 || nz * vz <= 0) {
+				nx = vx * sin_a + vz * cos_a;
+				nz = vx * cos_a - vz * sin_a;
+			}
+
+			vx = nx;
+			vz = nz;
 		}
 	}
 
@@ -421,19 +467,19 @@ int main(int argc, char *argv[]) {
 	Golero golero;
 
 	Plataforma plataforma(15);
-	ListaObjetos listaObjetos;
+	ListaObjetos *listaObjetos = ListaObjetos::getInstance();
 
-	listaObjetos.agregar(new Defensa(-12, -10));
-	listaObjetos.agregar(new Defensa(-8, -10));
-	listaObjetos.agregar(new Defensa(-4, -10));
-	listaObjetos.agregar(new Defensa(0, -10));
-	listaObjetos.agregar(new Defensa(4, -10));
-	listaObjetos.agregar(new Defensa(8, -10));
-	listaObjetos.agregar(new Defensa(12, -10));
-	listaObjetos.agregar(&plataforma);
-	listaObjetos.agregar(&golero);
+	listaObjetos->agregar(new Defensa(-12, -10));
+	listaObjetos->agregar(new Defensa(-8, -10));
+	listaObjetos->agregar(new Defensa(-4, -10));
+	listaObjetos->agregar(new Defensa(0, -10));
+	listaObjetos->agregar(new Defensa(4, -10));
+	listaObjetos->agregar(new Defensa(8, -10));
+	listaObjetos->agregar(new Defensa(12, -10));
+	listaObjetos->agregar(&plataforma);
+	listaObjetos->agregar(&golero);
 
-	Pelota pelota(0, 0, 1, 20, 20, 15, 25, &listaObjetos);
+	Pelota pelota(0, 0, 1, 20, 20, 15, 25);
 
 	bool left = false, right = false;
 
@@ -508,7 +554,7 @@ int main(int argc, char *argv[]) {
 		if (left)
 			plataforma.mover(deltaTime, -1);
 
-		for (auto objeto : listaObjetos.lista())
+		for (auto objeto : listaObjetos->lista())
 			objeto->dibujar();
 
 		pelota.dibujar();
