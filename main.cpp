@@ -59,11 +59,22 @@ void dibujarCubo(float w, float h, float d) {
 	glEnd();
 }
 
-void dibujarCuadradoconTextura(float w, float h, float d) {
-	float x = w / 2.0f, y = h / 2.0f, z = d / 2.0f;
+void dibujarCuadrado(float w, float y, float d) {
+	float x = w / 2.0f, z = d / 2.0f;
 
 	glBegin(GL_QUADS);
-	// CARA SUPERIOR (La que sería la cancha)
+	glNormal3f(0, 1, 0);
+	glVertex3f(-x, y, -z);
+	glVertex3f(x, y, -z);
+	glVertex3f(x, y, z);
+	glVertex3f(-x, y, z);
+	glEnd();
+}
+
+void dibujarCuadradoconTextura(float w, float y, float d) {
+	float x = w / 2.0f, z = d / 2.0f;
+
+	glBegin(GL_QUADS);
 	glNormal3f(0, 1, 0);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(-x, y, -z); // Abajo-Izquierda de la foto
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(x, y, -z);  // Abajo-Derecha de la foto
@@ -99,12 +110,11 @@ void dibujarArco() {
 }
 
 void dibujarCancha() {
-	glEnable(GL_TEXTURE_2D);       // 1. Activo texturas
-	glBindTexture(GL_TEXTURE_2D, textura); // 2. Uso la de la cancha
+	glBindTexture(GL_TEXTURE_2D, textura);
 
 	glPushMatrix();
 	glTranslatef(0, -0.2, 0);
-	dibujarCuadradoconTextura(30, 0.4, 50); // 3. Dibujo
+	dibujarCuadradoconTextura(30, 0.4, 50);
 	glPopMatrix();
 
 	glDisable(GL_TEXTURE_2D);
@@ -562,7 +572,8 @@ int main(int argc, char *argv[]) {
 
 	bool fin = false;
 	bool pausa = false;
-	bool rotate = false;
+	bool texturas = true;
+	bool wireframe = false;
 
 	SDL_Event evento;
 
@@ -689,10 +700,21 @@ int main(int argc, char *argv[]) {
 
 		glEnable(GL_LIGHTING);
 
+		if (wireframe) {
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		} else {
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		}
+
 		dibujarArco();
 
 		luzAmbiente(1, 1, 1);
-		dibujarCancha();
+		if (texturas) {
+			glEnable(GL_TEXTURE_2D);
+			dibujarCancha();
+			glDisable(GL_TEXTURE_2D);
+		} else 
+			dibujarCancha();
 
 		if (!pausa) {
 			pelota.mover(deltaTime);
@@ -773,6 +795,13 @@ int main(int argc, char *argv[]) {
 					break;
 				case SDLK_p:
 					pausa = !pausa;
+					break;
+				case SDLK_t:
+					texturas = !texturas;
+					break;
+				case SDLK_w:
+					wireframe = !wireframe;
+					break;
 				}
 				break;
 
