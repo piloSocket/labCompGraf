@@ -98,6 +98,7 @@ void dibujarArco() {
 
 void dibujarCancha(GLuint textura) {
 	glBindTexture(GL_TEXTURE_2D, textura);
+	glColor3f(1, 1, 1);
 
 	glPushMatrix();
 	dibujarCuadradoconTextura(30, 0, 50);
@@ -469,27 +470,58 @@ void renderTexto(string texto, int x, int y) {
 	if (!fuenteHUD || texto.empty()) return;
 
 	SDL_Color blanco = { 255, 255, 255, 255 };
-	SDL_Surface* surface = TTF_RenderText_Blended(fuenteHUD, texto.c_str(), blanco);
+
+	// 1. Renderizamos la superficie original
+	SDL_Surface* surfaceOriginal = TTF_RenderText_Blended(fuenteHUD, texto.c_str(), blanco);
+	if (!surfaceOriginal) return;
+
+	// CAMBIO 1: Convertimos la superficie a un formato fijo (RGBA32).
+	// Esto estandariza la memoria para que siempre sea R, G, B, A, sin importar 
+	// la arquitectura del sistema, solucionando colores invertidos o alfas que no funcionan.
+	SDL_Surface* surface = SDL_ConvertSurfaceFormat(surfaceOriginal, SDL_PIXELFORMAT_RGBA32, 0);
+	SDL_FreeSurface(surfaceOriginal); // Liberamos la original que ya no precisamos
 
 	GLuint texturaTexto;
 	glGenTextures(1, &texturaTexto);
 	glBindTexture(GL_TEXTURE_2D, texturaTexto);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_BGRA, GL_UNSIGNED_BYTE, surface->pixels);
+	// CAMBIO 2: Alineación de desempaquetado.
+	// Le decimos a OpenGL que lea la textura alineada byte a byte (1) en vez de a bloques de 4.
+	// Esto arregla el bug donde el texto se ve inclinado o ilegible.
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, surface->pixels);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_TEXTURE_2D);
+
+	// CAMBIO 3: Usamos GL_MODULATE y seteamos el color explícitamente a blanco.
+	// GL_REPLACE ignora por completo la transparencia si el entorno no está perfecto.
+	// Modulate respeta el color y el alfa del texto.
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
 	glBegin(GL_QUADS);
+	// Las coordenadas de textura estaban bien mapeadas para invertir el eje Y de SDL
 	glTexCoord2f(0, 1); glVertex2i(x, y);
 	glTexCoord2f(1, 1); glVertex2i(x + surface->w, y);
 	glTexCoord2f(1, 0); glVertex2i(x + surface->w, y + surface->h);
 	glTexCoord2f(0, 0); glVertex2i(x, y + surface->h);
 	glEnd();
-	glDisable(GL_TEXTURE_2D);
 
+	glDisable(GL_BLEND);
+	glDisable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	glDeleteTextures(1, &texturaTexto);
+
+	// CAMBIO 4: Restauramos la alineación por defecto para no afectar
+	// la carga de otras texturas (como la cancha) más adelante.
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+
 	SDL_FreeSurface(surface);
 }
 
@@ -506,10 +538,24 @@ int main(int argc, char *argv[]) {
 		cout << "Error SDL_ttf: " << TTF_GetError() << endl;
 	}
 
-	// 2. Cargar la fuente (Asegúrate que el archivo .ttf esté en la carpeta del proyecto)
-	fuenteHUD = TTF_OpenFont("arial.ttf", 24);
+	// 2. Cargar la fuente con búsqueda en múltiples rutas
+	const char* rutasFuentes[] = {
+		"arial.ttf",            // Misma carpeta que el ejecutable
+		"../arial.ttf",         // Carpeta del proyecto (una arriba de Debug)
+		"C:/Windows/Fonts/arial.ttf" // Ruta absoluta del sistema (Windows)
+	};
+
+	for (const char* ruta : rutasFuentes) {
+		fuenteHUD = TTF_OpenFont(ruta, 24);
+		if (fuenteHUD) {
+			cout << "Fuente cargada exitosamente desde: " << ruta << endl;
+			break;
+		}
+	}
+
 	if (!fuenteHUD) {
-		cout << "No se encontró el archivo arial.ttf!" << endl;
+		cout << "Error critico: No se pudo cargar arial.ttf en ninguna ruta conocida." << endl;
+		cout << "Detalle SDL_ttf: " << TTF_GetError() << endl;
 	}
 
 	tiempoInicio = SDL_GetTicks();
@@ -612,33 +658,6 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
-		// --- INICIO DIBUJO HUD ---
-		glDisable(GL_LIGHTING); // El HUD no necesita luces
-
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-		gluOrtho2D(0, 1000, 0, 700); // Proyección 2D (ancho y alto de tu ventana)
-
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-
-		glDisable(GL_DEPTH_TEST); // Para que el HUD siempre esté arriba
-
-		// Dibujar contenido
-		int segundos = (SDL_GetTicks() - tiempoInicio) / 1000;
-		renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660);
-		renderTexto("Tiempo: " + to_string(segundos) + "s", 850, 660);
-
-		glEnable(GL_DEPTH_TEST);
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-
-		glEnable(GL_LIGHTING);
-		// --- FIN DIBUJO HUD ---
 
 		// Actualizar posición de la cámara
 		float yaw_rad   = yaw   * M_PI / 180.0f;
@@ -725,6 +744,36 @@ int main(int argc, char *argv[]) {
 		pelota.dibujar();
 		golero.dibujar();
 
+		// --- INICIO DIBUJO HUD ---
+		glDisable(GL_LIGHTING); 
+		glDisable(GL_DEPTH_TEST);// El HUD no necesita luces
+
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadIdentity();
+		gluOrtho2D(0, 1000, 0, 700); // Proyección 2D (ancho y alto de tu ventana)
+
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+
+		glColor3f(1.0f, 1.0f, 1.0f);
+
+		// Dibujar contenido
+		int segundos = (SDL_GetTicks() - tiempoInicio) / 1000;
+		renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660);
+		renderTexto("Tiempo: " + to_string(segundos) + "s", 850, 660);
+
+		// Restaurar estados para el próximo frame
+		glMatrixMode(GL_PROJECTION);
+		glPopMatrix();
+		glMatrixMode(GL_MODELVIEW);
+		glPopMatrix();
+
+		glEnable(GL_DEPTH_TEST);
+		glEnable(GL_LIGHTING);
+		// --- FIN DIBUJO HUD ---
+
 		glDisable(GL_LIGHTING);
 
 		while (SDL_PollEvent(&evento)) {
@@ -808,6 +857,8 @@ int main(int argc, char *argv[]) {
 
 	//FIN LOOP PRINCIPAL
 	// LIMPIEZA
+	if (fuenteHUD) TTF_CloseFont(fuenteHUD); // Limpieza de fuente
+	TTF_Quit();
 	SDL_GL_DeleteContext(context);
 	SDL_DestroyWindow(win);
 	SDL_Quit();
