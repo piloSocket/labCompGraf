@@ -728,7 +728,7 @@ int main(int argc, char *argv[]) {
 					    // Órbita
 					    float sensibilidad = 0.2f;
 					    // Mantener yaw entre -90 y 90, y el pitch mayor a 10
-					    yaw = clamp(yaw + evento.motion.xrel * sensibilidad, -90.f, 90.f);
+					    yaw = max(-90.f, min(yaw + evento.motion.xrel * sensibilidad, 90.f));
 					    pitch = max(pitch - evento.motion.yrel * sensibilidad, 10.f);
 					    if (pitch >  89.0f) pitch =  89.0f;
 					    if (pitch < -89.0f) pitch = -89.0f;
@@ -740,7 +740,7 @@ int main(int argc, char *argv[]) {
 				if (vistaActual == LIBRE) {
 					float scrollSpeed = .5f;
 					// Mantener el radio entre 5 y 70
-					radio = clamp(radio - evento.wheel.y * scrollSpeed, 10.f, 70.f);
+					radio = max(10.f, min(radio - evento.wheel.y * scrollSpeed, 70.f));
 				}
 				break;
 
