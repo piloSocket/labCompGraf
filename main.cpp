@@ -235,7 +235,7 @@ public:
 		glEndList();
 	}
 
-	void actualizar(float dt) {
+	void mover(float dt) {
 		// Movimiento lineal
 		x += velocidad * dt * direccion;
 
@@ -607,6 +607,7 @@ int main(int argc, char *argv[]) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
 	bool fin = false;
+	bool pausa = false;
 	bool rotate = false;
 
 	SDL_Event evento;
@@ -653,7 +654,6 @@ int main(int argc, char *argv[]) {
 		float deltaTime = (now - last) / 1000.0f;
 		last = now;
 		
-		golero.actualizar(deltaTime);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
@@ -713,14 +713,18 @@ int main(int argc, char *argv[]) {
 		luzAmbiente(1, 1, 1);
 		dibujarCancha();
 
-		pelota.mover(deltaTime);
+		if (!pausa) {
+			pelota.mover(deltaTime);
 
-		if (right)
-			plataforma.mover(deltaTime, 1);
-		else if (left)
-			plataforma.mover(deltaTime, -1);
-		else
-			plataforma.mover(deltaTime, 0);
+			if (right)
+				plataforma.mover(deltaTime, 1);
+			else if (left)
+				plataforma.mover(deltaTime, -1);
+			else
+				plataforma.mover(deltaTime, 0);
+
+			golero.mover(deltaTime);
+		}
 
 		for (auto objeto : listaObjetos->lista())
 			objeto->dibujar();
@@ -812,7 +816,12 @@ int main(int argc, char *argv[]) {
 						SDL_SetRelativeMouseMode(SDL_FALSE);
 					}
 					break;
-				case SDLK_ESCAPE: fin = true; break;
+				case SDLK_ESCAPE: 
+				case SDLK_q:
+					fin = true; 
+					break;
+				case SDLK_p:
+					pausa = !pausa;
 				}
 				break;
 
