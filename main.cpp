@@ -786,10 +786,8 @@ int main(int argc, char *argv[]) {
 				break;
 
 			case SDL_MOUSEMOTION:
-				// IMPORTANTE: Solo rotamos si es modo LIBRE
 				if (vistaActual == LIBRE) {
 					if (evento.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-					    // Zoom con click derecho (opcional, o usá rueda del mouse)
 					    radio += evento.motion.yrel * 0.05f;
 					    if (radio < 0.5f) radio = 0.5f;
 					} else {
@@ -807,7 +805,7 @@ int main(int argc, char *argv[]) {
 			case SDL_MOUSEWHEEL:
 				if (vistaActual == LIBRE) {
 					float scrollSpeed = .5f;
-					// Mantener el radio entre 5 y 70
+					// Mantener el radio entre 10 y 70
 					radio = max(10.f, min(radio - evento.wheel.y * scrollSpeed, 70.f));
 				}
 				break;
@@ -821,12 +819,10 @@ int main(int argc, char *argv[]) {
 					if (vistaActual == ORIGINAL) {
 						vistaActual = PERSONAJE;
 						SDL_SetRelativeMouseMode(SDL_FALSE); // No necesitamos atrapar mouse en 1ra persona fija
-					}
-					else if (vistaActual == PERSONAJE) {
+					} else if (vistaActual == PERSONAJE) {
 						vistaActual = LIBRE;
 						SDL_SetRelativeMouseMode(SDL_TRUE);  // Atrapamos para modo libre
-					}
-					else {
+					} else {
 						vistaActual = ORIGINAL;
 						SDL_SetRelativeMouseMode(SDL_FALSE);
 					}
@@ -849,8 +845,12 @@ int main(int argc, char *argv[]) {
 
 			case SDL_KEYUP:
 				switch (evento.key.keysym.sym) {
-				case SDLK_RIGHT: right = false; break;
-				case SDLK_LEFT:  left = false;  break;
+				case SDLK_RIGHT:
+					right = false;
+					break;
+				case SDLK_LEFT:
+					left = false;
+					break;
 				}
 				break;
 			}
