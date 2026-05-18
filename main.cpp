@@ -610,7 +610,7 @@ void dibujarMenu(Uint32 tiempoTranscurrido, Fuente *fuente) {
 	renderTexto("PILONOID", 230, 500, fuente->getFont(100));
 	glColor3f(1.0f, 1.0f, 1.0f);
 	if (((int) tiempoTranscurrido) % 2 == 0)
-		renderTexto("Presiona p para jugar", 380, 400, fuente->getFont(20));
+		renderTexto("presiona p para jugar", 380, 400, fuente->getFont(20));
 	renderTexto("Juan Andrés Olmedo  -  Francisco Piloni", 270, 100, fuente->getFont(20));
 
 	// Restaurar estados para el próximo frame
@@ -880,16 +880,19 @@ int main(int argc, char *argv[]) {
 					fin = true; 
 					break;
 				case SDLK_p:
-					if (menu)
+					if (menu) {
 						menu = false;
-					else
+						tiempoInicial = SDL_GetTicks();
+					} else
 						pausa = !pausa;
 					break;
 				case SDLK_t:
-					texturas = !texturas;
+					if (menu)
+						texturas = !texturas;
 					break;
 				case SDLK_w:
-					wireframe = !wireframe;
+					if (menu)
+						wireframe = !wireframe;
 					break;
 				}
 				break;
