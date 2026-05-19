@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <string>
+#include <map>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>
 #include <SDL2/SDL_ttf.h>
@@ -19,10 +20,6 @@
 #endif
 
 using namespace std;
-
-// Globales para el HUD
-TTF_Font* fuenteHUD = nullptr;
-Uint32 tiempoInicio;
 
 enum ModoCamara { ORIGINAL, PERSONAJE, LIBRE };
 ModoCamara vistaActual = ORIGINAL;
@@ -665,13 +662,51 @@ public:
 	}
 };
 
-void renderTexto(string texto, int x, int y) {
-	if (!fuenteHUD || texto.empty()) return;
+class Fuente {
+private:
+	map<int, TTF_Font *> fuentes;
+	initializer_list<const char *> rutas;
+public:
+	explicit Fuente(initializer_list<const char *> rutas) : rutas(rutas) {}
+
+	void openSize(int size) {
+		fuentes[size] = nullptr;
+
+		for (const char *ruta : rutas) {
+			fuentes[size] = TTF_OpenFont(ruta, size);
+			if (fuentes[size])
+				break;
+		}
+
+		if (!fuentes[size]) {
+			cerr << "Error crítico: No se pudo cargar " << *(rutas.begin())
+				 << " en ninguna ruta conocida." << endl;
+			cerr << "Detalle SDL_ttf: " << TTF_GetError() << endl;
+			exit(1);
+		}
+	}
+
+	~Fuente() {
+		for (auto fuente: fuentes)
+			if (fuente.second)
+				TTF_CloseFont(fuente.second);
+	}
+
+	TTF_Font *getFont(int size) {
+		if (fuentes.count(size) == 0)
+			openSize(size);
+		
+		return fuentes[size];
+	}
+};
+
+void renderTexto(const string &texto, int x, int y, TTF_Font *fuente) {
+	if (!fuente || texto.empty()) return;
 
 	SDL_Color blanco = { 255, 255, 255, 255 };
 
 	// 1. Renderizamos la superficie original
-	SDL_Surface* surfaceOriginal = TTF_RenderText_Blended(fuenteHUD, texto.c_str(), blanco);
+	SDL_Surface* surfaceOriginal = TTF_RenderText_Blended(fuente, texto.c_str(), blanco);
 	if (!surfaceOriginal) return;
 
 	// CAMBIO 1: Convertimos la superficie a un formato fijo (RGBA32).
@@ -702,7 +737,6 @@ void renderTexto(string texto, int x, int y) {
 	// GL_REPLACE ignora por completo la transparencia si el entorno no está perfecto.
 	// Modulate respeta el color y el alfa del texto.
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 
 	glBegin(GL_QUADS);
 	// Las coordenadas de textura estaban bien mapeadas para invertir el eje Y de SDL
@@ -724,6 +758,70 @@ void renderTexto(string texto, int x, int y) {
 	SDL_FreeSurface(surface);
 }
 
+void dibujarHUD(Uint32 tiempoTranscurrido, bool pausa, Puntaje *puntaje, Fuente *fuente) {
+	glDisable(GL_LIGHTING); 
+	glDisable(GL_DEPTH_TEST);// El HUD no necesita luces
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(0, 1000, 0, 700); // Proyección 2D (ancho y alto de tu ventana)
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	glColor3f(1.0f, 1.0f, 1.0f);
+
+	// Dibujar contenido
+	if (pausa)
+		renderTexto("Pausa", 450, 660, fuente->getFont(24));
+
+	renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660, fuente->getFont(24));
+	renderTexto("Tiempo: " + to_string(tiempoTranscurrido) + "s", 850, 660, fuente->getFont(24));
+
+	// Restaurar estados para el próximo frame
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_LIGHTING);
+}
+
+void dibujarMenu(Uint32 tiempoTranscurrido, Fuente *fuente) {
+	glDisable(GL_LIGHTING); 
+	glDisable(GL_DEPTH_TEST);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+	gluOrtho2D(0, 1000, 0, 700); // Proyección 2D (ancho y alto de tu ventana)
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	glColor3f(1.0f, 1.0f, 1.0f);
+	renderTexto("PILONOID", 230, 500, fuente->getFont(100));
+	glColor3f(1.0f, 1.0f, 1.0f);
+	if (((int) tiempoTranscurrido) % 2 == 0)
+		renderTexto("presiona p para jugar", 380, 400, fuente->getFont(20));
+	renderTexto("Juan Andrés Olmedo  -  Francisco Piloni", 270, 100, fuente->getFont(20));
+
+	// Restaurar estados para el próximo frame
+	glMatrixMode(GL_PROJECTION);
+	glPopMatrix();
+	glMatrixMode(GL_MODELVIEW);
+	glPopMatrix();
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_LIGHTING);
+}
+
 int main(int argc, char *argv[]) {
 	srand(time(NULL));
 	//INICIALIZACION
@@ -732,32 +830,16 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	// 1. Inicializar SDL_ttf
+	// Cargar las fuentes con búsqueda en múltiples rutas (para macOS/Windows)
 	if (TTF_Init() == -1) {
-		cout << "Error SDL_ttf: " << TTF_GetError() << endl;
+		cerr << "Error SDL_ttf: " << TTF_GetError() << endl;
+		exit(1);
 	}
 
-	// 2. Cargar la fuente con búsqueda en múltiples rutas
-	const char* rutasFuentes[] = {
-		"arial.ttf",            // Misma carpeta que el ejecutable
-		"../arial.ttf",         // Carpeta del proyecto (una arriba de Debug)
-		"C:/Windows/Fonts/arial.ttf" // Ruta absoluta del sistema (Windows)
-	};
+	map<string, Fuente *> fuentes;
 
-	for (const char* ruta : rutasFuentes) {
-		fuenteHUD = TTF_OpenFont(ruta, 24);
-		if (fuenteHUD) {
-			cout << "Fuente cargada exitosamente desde: " << ruta << endl;
-			break;
-		}
-	}
-
-	if (!fuenteHUD) {
-		cout << "Error critico: No se pudo cargar arial.ttf en ninguna ruta conocida." << endl;
-		cout << "Detalle SDL_ttf: " << TTF_GetError() << endl;
-	}
-
-	tiempoInicio = SDL_GetTicks();
+	fuentes["arial"] = new Fuente({"arial.ttf", "../arial.ttf", "C:/Windows/Fonts/arial.ttf"});
+	fuentes["audiowide"] = new Fuente({"audiowide.ttf", "../audiowide.ttf"});
 
 	SDL_Window* win = SDL_CreateWindow("Lab 1 Comp. Grafica, Juan Andres Olmedo y Francisco Piloni",
 		SDL_WINDOWPOS_CENTERED,
@@ -767,12 +849,18 @@ int main(int argc, char *argv[]) {
 
 	glMatrixMode(GL_PROJECTION);
 
-	float color = 0;
-	glClearColor(color, color, color, 1);
+	glClearColor(0, 0, 0, 1);
 
 	gluPerspective(45, 1000 / 700.f, 0.1, 110);
 	glEnable(GL_DEPTH_TEST);
 	glMatrixMode(GL_MODELVIEW);
+
+	// Activar Backface Culling
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+
+	// Activar iluminación
+	glEnable(GL_LIGHTING);
 
 	//TEXTURA
 	#ifdef __APPLE__
@@ -802,19 +890,21 @@ int main(int argc, char *argv[]) {
 	gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, w, h, GL_RGB, GL_UNSIGNED_BYTE, datos);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
-	bool fin = false;
-	bool pausa = false;
-	bool texturas = true;
-	bool wireframe = false;
+	// Variables de control y configuración
+	bool fin = false,
+		 menu = true,
+		 pausa = false,
+		 texturas = true,
+		 wireframe = false;
+
+	// Teclas izquierda/derecha apretadas
+	bool left = false,
+		 right = false;
+
+	Uint32 tiempoInicial = SDL_GetTicks(),
+		   tiempoEnPausa = 0;
 
 	SDL_Event evento;
-
-	float x, y, z;
-
-	x = 0;
-	y = 15;
-	z = 50;
-	float degrees = 0;
 
 	float multiplicadorVelocidad = 1.0f;
 	const float VEL_MAXIMA = 3.0f;
@@ -826,8 +916,8 @@ int main(int argc, char *argv[]) {
 	GLfloat luz_posicion2[4] = { -15, 5, 30, 1 };
 	GLfloat luz_posicion3[4] = { -15, 5, -20, 1 };
 	GLfloat colorLuz[4] = { 1, 1, 1, 1 };
-	//FIN INICIALIZACION
-	bool textOn = true;
+	
+	// Variables de juego
 	Golero golero;
 	Puntaje *puntaje = Puntaje::getInstance();
 
@@ -846,14 +936,9 @@ int main(int argc, char *argv[]) {
 
 	Pelota pelota(0, 0, 1, 20, 20, 15, 25);
 
-	bool left = false, right = false;
-
 	Uint32 last = SDL_GetTicks();
 
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
-
-	//LOOP PRINCIPAL
+	// LOOP PRINCIPAL
 	do {
 		Uint32 now = SDL_GetTicks();
 		float deltaTimeReal = (now - last) / 1000.0f;
@@ -864,7 +949,7 @@ int main(int argc, char *argv[]) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
-		// Actualizar posición de la cámara
+		// Actualizar posición de la cámara según modo de vista
 		float yaw_rad   = yaw   * M_PI / 180.0f;
 		float pitch_rad = pitch * M_PI / 180.0f;
 
@@ -872,137 +957,93 @@ int main(int argc, char *argv[]) {
 		camY = radio * sin(pitch_rad);
 		camZ = radio * cos(pitch_rad) * cos(yaw_rad);
 
-		// --- APLICAR MODO DE CAMARA ---
 		float platX = plataforma.getX();
 		float platZ = plataforma.getZ();
+
 		switch (vistaActual) {
 		case ORIGINAL:
-			gluLookAt(0, 15, 50,
-				0, 0, 0,
-				0, 1, 0);
+			gluLookAt(0, 15, 50, 0, 0, 0, 0, 1, 0);
 			break;
-
 		case PERSONAJE:
-			gluLookAt(platX, 5, platZ + 15,
-				platX, 5, platZ,
-				0, 1, 0);
+			gluLookAt(platX, 5, platZ + 15, platX, 5, platZ, 0, 1, 0);
 			break;
-
 		case LIBRE:
-			gluLookAt(camX, camY, camZ,
-				0, 0, 0,
-				0, 1, 0);
+			gluLookAt(camX, camY, camZ, 0, 0, 0, 0, 1, 0);
 			break;
 		}
 
-		//PRENDO LA LUZ (SIEMPRE DESPUES DEL gluLookAt)
-		glEnable(GL_LIGHT0); // habilita la luz 0
+		// Habilitar cuatro luces en las esquinas de la cancha
+		glEnable(GL_LIGHT0);
 		glLightfv(GL_LIGHT0, GL_POSITION, luz_posicion);
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, colorLuz);
 		
-		glEnable(GL_LIGHT1); // habilita la luz 1
+		glEnable(GL_LIGHT1);
 		glLightfv(GL_LIGHT1, GL_POSITION, luz_posicion1);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
 		
-		glEnable(GL_LIGHT2); // habilita la luz 2
+		glEnable(GL_LIGHT2);
 		glLightfv(GL_LIGHT2, GL_POSITION, luz_posicion2);
 		glLightfv(GL_LIGHT2, GL_DIFFUSE, colorLuz);
 		
-		glEnable(GL_LIGHT3); // habilita la luz 3
+		glEnable(GL_LIGHT3);
 		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
 		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
 
-		glEnable(GL_LIGHTING);
-
+		// Configuración de Wireframes (on/off)
 		if (wireframe) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		} else {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		}
 
-		if (texturas) {
+		// Configuración de texturas (on/off)
+		if (texturas)
 			glEnable(GL_TEXTURE_2D);
-			dibujarCancha(textura);
+		else 
 			glDisable(GL_TEXTURE_2D);
-		} else 
-			dibujarCancha(textura);
 
-		dibujarArco();
 		luzAmbiente(1, 1, 1);
 
-		if (!pausa) {
-			pelota.mover(dtEscalado);
+		if (menu) {
+			dibujarMenu((now - tiempoInicial) / 1000, fuentes["audiowide"]);
+		} else {
+			if (pausa) {
+				tiempoEnPausa += now - last;
+			} else {
+				pelota.mover(deltaTime);
 			SistemaFuegos::getInstance()->actualizar(dtEscalado);
 
-			if (right)
-				plataforma.mover(dtEscalado, 1);
-			else if (left)
-				plataforma.mover(dtEscalado, -1);
-			else
+				if (right)
+					plataforma.mover(deltaTime, 1);
+				else if (left)
+					plataforma.mover(deltaTime, -1);
+				else
+					plataforma.mover(deltaTime, 0);
 				plataforma.mover(dtEscalado, 0);
-
 			golero.mover(dtEscalado);
 		}
 
-		for (auto objeto : listaObjetos->lista())
-			objeto->dibujar();
+			for (auto objeto : listaObjetos->lista())
+				objeto->dibujar();
 
-		pelota.dibujar();
+			pelota.dibujar();
 		golero.dibujar();
-		SistemaFuegos::getInstance()->dibujar();
 
-		// --- INICIO DIBUJO HUD ---
-		glDisable(GL_LIGHTING); 
-		glDisable(GL_DEPTH_TEST);// El HUD no necesita luces
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+			dibujarArco();
+			dibujarCancha(textura);
 
-		glMatrixMode(GL_PROJECTION);
-		glPushMatrix();
-		glLoadIdentity();
-		gluOrtho2D(0, 1000, 0, 700); // Proyección 2D (ancho y alto de tu ventana)
-
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-		glLoadIdentity();
-
-		glColor3f(1.0f, 1.0f, 1.0f);
-
-		// Dibujar contenido
-		if (pausa) {
-			tiempoInicio = tiempoInicio + (now - last);
-			renderTexto("Pausa", 450, 660);
+			dibujarHUD(((now - tiempoInicial) - tiempoEnPausa) / 1000, pausa, puntaje, fuentes["arial"]);
 		}
 		int segundos = (now - tiempoInicio) / 1000;
 		renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660);
 		renderTexto("Tiempo: " + to_string(segundos) + "s", 850, 660);
 
-		// CAMBIO: Mostrar la velocidad actual en el HUD
-		string txtVel = "Velocidad: " + to_string(multiplicadorVelocidad).substr(0, 3) + "x";
-		renderTexto(txtVel, 420, 20);
-
 		// Restaurar estados para el próximo frame
-		glMatrixMode(GL_PROJECTION);
-		glPopMatrix();
-		glMatrixMode(GL_MODELVIEW);
-		glPopMatrix();
-
-		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_LIGHTING);
-		// --- FIN DIBUJO HUD ---
-
-		glDisable(GL_LIGHTING);
-
-		while (SDL_PollEvent(&evento)) {
-			switch (evento.type) {
-			case SDL_QUIT:
-				fin = true;
 				break;
 
 			case SDL_MOUSEMOTION:
-				// IMPORTANTE: Solo rotamos si es modo LIBRE
 				if (vistaActual == LIBRE) {
 					if (evento.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-					    // Zoom con click derecho (opcional, o usá rueda del mouse)
 					    radio += evento.motion.yrel * 0.05f;
 					    if (radio < 0.5f) radio = 0.5f;
 					} else {
@@ -1020,7 +1061,7 @@ int main(int argc, char *argv[]) {
 			case SDL_MOUSEWHEEL:
 				if (vistaActual == LIBRE) {
 					float scrollSpeed = .5f;
-					// Mantener el radio entre 5 y 70
+					// Mantener el radio entre 10 y 70
 					radio = max(10.f, min(radio - evento.wheel.y * scrollSpeed, 70.f));
 				}
 				break;
@@ -1041,12 +1082,10 @@ int main(int argc, char *argv[]) {
 					if (vistaActual == ORIGINAL) {
 						vistaActual = PERSONAJE;
 						SDL_SetRelativeMouseMode(SDL_FALSE); // No necesitamos atrapar mouse en 1ra persona fija
-					}
-					else if (vistaActual == PERSONAJE) {
+					} else if (vistaActual == PERSONAJE) {
 						vistaActual = LIBRE;
 						SDL_SetRelativeMouseMode(SDL_TRUE);  // Atrapamos para modo libre
-					}
-					else {
+					} else {
 						vistaActual = ORIGINAL;
 						SDL_SetRelativeMouseMode(SDL_FALSE);
 					}
@@ -1056,21 +1095,31 @@ int main(int argc, char *argv[]) {
 					fin = true; 
 					break;
 				case SDLK_p:
-					pausa = !pausa;
+					if (menu) {
+						menu = false;
+						tiempoInicial = SDL_GetTicks();
+					} else
+						pausa = !pausa;
 					break;
 				case SDLK_t:
-					texturas = !texturas;
+					if (menu)
+						texturas = !texturas;
 					break;
 				case SDLK_w:
-					wireframe = !wireframe;
+					if (menu)
+						wireframe = !wireframe;
 					break;
 				}
 				break;
 
 			case SDL_KEYUP:
 				switch (evento.key.keysym.sym) {
-				case SDLK_RIGHT: right = false; break;
-				case SDLK_LEFT:  left = false;  break;
+				case SDLK_RIGHT:
+					right = false;
+					break;
+				case SDLK_LEFT:
+					left = false;
+					break;
 				}
 				break;
 			}
@@ -1081,8 +1130,6 @@ int main(int argc, char *argv[]) {
 	} while (!fin);
 
 	//FIN LOOP PRINCIPAL
-	// LIMPIEZA
-	if (fuenteHUD) TTF_CloseFont(fuenteHUD); // Limpieza de fuente
 	TTF_Quit();
 	SDL_GL_DeleteContext(context);
 	SDL_DestroyWindow(win);
