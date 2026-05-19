@@ -943,14 +943,17 @@ int main(int argc, char *argv[]) {
 		Uint32 now = SDL_GetTicks();
 		float deltaTimeReal = (now - last) / 1000.0f;
 
-		// CAMBIO: Calculamos el delta escalado para la lógica de movimiento
+		// Evitamos picos extraños en el delta time si la ventana se congela un milisegundo
+		if (deltaTimeReal > 0.1f) deltaTimeReal = 0.1f;
+
+		// Calculamos el delta escalado para la lógica de movimiento
 		float dtEscalado = deltaTimeReal * multiplicadorVelocidad;
-		
+
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 
-		// Actualizar posición de la cámara según modo de vista
-		float yaw_rad   = yaw   * M_PI / 180.0f;
+		// Actualizar posición de la cámara según modo de vista (Asegúrate de tener definidas estas variables globales)
+		float yaw_rad = yaw * M_PI / 180.0f;
 		float pitch_rad = pitch * M_PI / 180.0f;
 
 		camX = radio * cos(pitch_rad) * sin(yaw_rad);
@@ -976,15 +979,15 @@ int main(int argc, char *argv[]) {
 		glEnable(GL_LIGHT0);
 		glLightfv(GL_LIGHT0, GL_POSITION, luz_posicion);
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, colorLuz);
-		
+
 		glEnable(GL_LIGHT1);
 		glLightfv(GL_LIGHT1, GL_POSITION, luz_posicion1);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
-		
+
 		glEnable(GL_LIGHT2);
 		glLightfv(GL_LIGHT2, GL_POSITION, luz_posicion2);
 		glLightfv(GL_LIGHT2, GL_DIFFUSE, colorLuz);
-		
+
 		glEnable(GL_LIGHT3);
 		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
 		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
@@ -992,68 +995,76 @@ int main(int argc, char *argv[]) {
 		// Configuración de Wireframes (on/off)
 		if (wireframe) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		} else {
+		}
+		else {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		}
 
 		// Configuración de texturas (on/off)
 		if (texturas)
 			glEnable(GL_TEXTURE_2D);
-		else 
+		else
 			glDisable(GL_TEXTURE_2D);
 
 		luzAmbiente(1, 1, 1);
 
 		if (menu) {
 			dibujarMenu((now - tiempoInicial) / 1000, fuentes["audiowide"]);
-		} else {
+		}
+		else {
 			if (pausa) {
 				tiempoEnPausa += now - last;
-			} else {
-				pelota.mover(deltaTime);
-			SistemaFuegos::getInstance()->actualizar(dtEscalado);
+			}
+			else {
+				// Corregido: Usamos dtEscalado para que la velocidad afecte a todo el entorno uniformemente
+				pelota.mover(dtEscalado);
+				SistemaFuegos::getInstance()->actualizar(dtEscalado);
 
 				if (right)
-					plataforma.mover(deltaTime, 1);
+					plataforma.mover(dtEscalado, 1);
 				else if (left)
-					plataforma.mover(deltaTime, -1);
+					plataforma.mover(dtEscalado, -1);
 				else
-					plataforma.mover(deltaTime, 0);
-				plataforma.mover(dtEscalado, 0);
-			golero.mover(dtEscalado);
-		}
+					plataforma.mover(dtEscalado, 0);
+
+				golero.mover(dtEscalado);
+			}
 
 			for (auto objeto : listaObjetos->lista())
 				objeto->dibujar();
 
 			pelota.dibujar();
-		golero.dibujar();
+			golero.dibujar();
 
 			dibujarArco();
 			dibujarCancha(textura);
 
+			// El HUD ya se encarga de renderizar de manera limpia los goles y el tiempo corregido por pausas
 			dibujarHUD(((now - tiempoInicial) - tiempoEnPausa) / 1000, pausa, puntaje, fuentes["arial"]);
 		}
-		int segundos = (now - tiempoInicio) / 1000;
-		renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660);
-		renderTexto("Tiempo: " + to_string(segundos) + "s", 850, 660);
-
-		// Restaurar estados para el próximo frame
+		// ==========================================
+		// CONTROL DE EVENTOS DE SDL (Estructura arreglada)
+		// ==========================================
+		while (SDL_PollEvent(&evento)) {
+			switch (evento.type) {
+			case SDL_QUIT:
+				fin = true;
 				break;
 
 			case SDL_MOUSEMOTION:
 				if (vistaActual == LIBRE) {
 					if (evento.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-					    radio += evento.motion.yrel * 0.05f;
-					    if (radio < 0.5f) radio = 0.5f;
-					} else {
-					    // Órbita
-					    float sensibilidad = 0.2f;
-					    // Mantener yaw entre -90 y 90, y el pitch mayor a 10
-					    yaw = max(-90.f, min(yaw + evento.motion.xrel * sensibilidad, 90.f));
-					    pitch = max(pitch - evento.motion.yrel * sensibilidad, 10.f);
-					    if (pitch >  89.0f) pitch =  89.0f;
-					    if (pitch < -89.0f) pitch = -89.0f;
+						radio += evento.motion.yrel * 0.05f;
+						if (radio < 0.5f) radio = 0.5f;
+					}
+					else {
+						// Órbita
+						float sensibilidad = 0.2f;
+						// Mantener yaw entre -90 y 90, y el pitch mayor a 10
+						yaw = max(-90.f, min(yaw + evento.motion.xrel * sensibilidad, 90.f));
+						pitch = max(pitch - evento.motion.yrel * sensibilidad, 10.f);
+						if (pitch > 89.0f) pitch = 89.0f;
+						if (pitch < -89.0f) pitch = -89.0f;
 					}
 				}
 				break;
@@ -1070,7 +1081,8 @@ int main(int argc, char *argv[]) {
 				switch (evento.key.keysym.sym) {
 				case SDLK_RIGHT: right = true; break;
 				case SDLK_LEFT:  left = true;  break;
-					// CAMBIO: Controles de velocidad con flechas
+
+					// Controles de velocidad con flechas
 				case SDLK_UP:
 					multiplicadorVelocidad = min(VEL_MAXIMA, multiplicadorVelocidad + PASO_VELOCIDAD);
 					break;
@@ -1081,25 +1093,30 @@ int main(int argc, char *argv[]) {
 					// Ciclo de cámaras
 					if (vistaActual == ORIGINAL) {
 						vistaActual = PERSONAJE;
-						SDL_SetRelativeMouseMode(SDL_FALSE); // No necesitamos atrapar mouse en 1ra persona fija
-					} else if (vistaActual == PERSONAJE) {
+						SDL_SetRelativeMouseMode(SDL_FALSE);
+					}
+					else if (vistaActual == PERSONAJE) {
 						vistaActual = LIBRE;
-						SDL_SetRelativeMouseMode(SDL_TRUE);  // Atrapamos para modo libre
-					} else {
+						SDL_SetRelativeMouseMode(SDL_TRUE);  // Atrapamos cursor en modo libre
+					}
+					else {
 						vistaActual = ORIGINAL;
 						SDL_SetRelativeMouseMode(SDL_FALSE);
 					}
 					break;
-				case SDLK_ESCAPE: 
+				case SDLK_ESCAPE:
 				case SDLK_q:
-					fin = true; 
+					fin = true;
 					break;
 				case SDLK_p:
 					if (menu) {
 						menu = false;
 						tiempoInicial = SDL_GetTicks();
-					} else
+						tiempoEnPausa = 0; // Resetear tiempos de partidas previas
+					}
+					else {
 						pausa = !pausa;
+					}
 					break;
 				case SDLK_t:
 					if (menu)
@@ -1124,12 +1141,19 @@ int main(int argc, char *argv[]) {
 				break;
 			}
 		}
+
 		SDL_GL_SwapWindow(win);
-
 		last = now;
-	} while (!fin);
 
+	} while (!fin);
 	//FIN LOOP PRINCIPAL
+
+	// Limpieza de memoria para punteros creados con 'new'
+	for (auto& par : fuentes) {
+		delete par.second;
+	}
+	fuentes.clear();
+
 	TTF_Quit();
 	SDL_GL_DeleteContext(context);
 	SDL_DestroyWindow(win);
