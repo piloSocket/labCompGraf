@@ -167,13 +167,19 @@ void dibujarArco() {
 }
 
 void dibujarCancha(GLuint textura) {
+	glEnable(GL_TEXTURE_2D); // Asegurar que esté activa por si acaso
 	glBindTexture(GL_TEXTURE_2D, textura);
-	glColor3f(1, 1, 1);
+
+	// Setear material neutral para que la textura muestre sus colores reales bajo la luz
+	GLfloat blanco[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blanco);
+	glColor3f(1.0f, 1.0f, 1.0f);
 
 	glPushMatrix();
 	dibujarCuadradoconTextura(30, 0, 50);
 	glPopMatrix();
 
+	glBindTexture(GL_TEXTURE_2D, 0); // Buena práctica: desvincular
 	glDisable(GL_TEXTURE_2D);
 }
 
@@ -406,10 +412,13 @@ private:
 	float radio;
 	float x, y, z, vx, vz, max_x, max_z;
 	int display_list;
-	ListaObjetos *objetos;
-	Puntaje *puntaje;
+	ListaObjetos* objetos;
+	Puntaje* puntaje;
 	std::deque<PuntoEstela> estela;
-	const size_t MAX_PUNTOS_ESTELA = 20;
+
+	// AUMENTADO: De 20 a 45 para tener una cola mucho más larga y visible
+	const size_t MAX_PUNTOS_ESTELA = 45;
+
 public:
 	// vxi y vzi son las velocidades iniciales en x y en z.
 	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z)
@@ -423,7 +432,6 @@ public:
 
 		glNewList(display_list, GL_COMPILE);
 		glPushMatrix();
-		// Una esfera con el radio configurado.
 		gluSphere(q, radio, 20, 20);
 		glPopMatrix();
 		glEndList();
@@ -432,94 +440,78 @@ public:
 	}
 
 	void reset() {
-		
 		x = 0;
 		z = 0;
 		estela.clear();
-		// Reiniciamos con la velocidad original pero con un ángulo aleatorio
-		// para que no sea siempre igual al sacar
-		float angulo_aleatorio = ((rand() % 60) - 30) * M_PI / 180.0f; // entre -30 y 30 grados
+		float angulo_aleatorio = ((rand() % 60) - 30) * M_PI / 180.0f;
 
 		float v = sqrt(vx * vx + vz * vz);
 		vx = v * sin(angulo_aleatorio);
 		vz = v * cos(angulo_aleatorio);
 
-		// Aseguramos que siempre salga hacia la plataforma
 		if (vz < 0) vz = -vz;
 	}
 
 	void mover(float dt) {
-		
 		x += dt * vx;
 		z += dt * vz;
 
 		bool interseccion = false;
 
-		// --- LÓGICA DE ESTELA CORREGIDA ---
 		if (estela.size() < 2) {
-			// Nos aseguramos de tener al menos una cabeza móvil y un ancla inicial
 			estela.clear();
-			estela.push_front({ x, y, z, 1.0f, false }); // Ancla
-			estela.push_front({ x, y, z, 1.0f, false }); // Cabeza móvil
+			estela.push_front({ x, y, z, 1.0f, false });
+			estela.push_front({ x, y, z, 1.0f, false });
 		}
 		else {
-			// IMPORTANTE: Calculamos la distancia contra el último ancla fija (estela[1]),
-			// NO contra la cabeza móvil (estela[0]) que se actualiza cada frame.
 			float dx = x - estela[1].x;
 			float dz = z - estela[1].z;
 			float distSqr = dx * dx + dz * dz;
 
-			// Si la pelota saltó (Reset/Gol), vaciamos inmediatamente
 			if (distSqr > 20.0f) {
 				estela.clear();
 				estela.push_front({ x, y, z, 1.0f, false });
 				estela.push_front({ x, y, z, 1.0f, false });
 			}
-			// Si se separó lo suficiente del ANCLA, insertamos un NUEVO punto fijo al frente
-			else if (distSqr > 0.05f) {
+			// AUMENTADO: Ahora guardamos puntos cuando se separa 0.15f (antes 0.05). 
+			// Esto "estira" la estela haciéndola físicamente más larga en el espacio.
+			else if (distSqr > 0.15f) {
 				estela.push_front({ x, y, z, 1.0f, false });
 				if (estela.size() > MAX_PUNTOS_ESTELA) {
 					estela.pop_back();
 				}
 			}
 			else {
-				// Si no avanzó lo suficiente, solo actualizamos la cabeza móvil (estela[0])
-				// para que siga a la pelota de forma fluida.
 				estela[0].x = x;
 				estela[0].z = z;
-				estela[0].vida = 1.0f; // Mantenemos la punta brillante
+				estela[0].vida = 1.0f;
 			}
 		}
 
-		// Desvanecimiento: Solo a partir del ancla (índice 1 en adelante)
+		// DISMINUIDO: Se desvanece más lento (antes 1.5, ahora 0.8)
 		for (size_t i = 1; i < estela.size(); i++) {
-			estela[i].vida -= dt * 1.5f;
+			estela[i].vida -= dt * 0.8f;
 		}
 
-		// Limpieza de puntos muertos (dejamos > 2 para no borrar la cabeza ni el ancla base)
 		while (estela.size() > 2 && estela.back().vida <= 0) {
 			estela.pop_back();
 		}
 
-		// --- DETECCIÓN DE GOL ---
-		// El arco está en z = -max_z y mide 12 de largo (de -6 a 6 en x)
+		// --- DETECCIÓN DE GOL Y BORDES (Intacta) ---
 		if (z - radio < -max_z) {
 			if (x > -6.0f && x < 6.0f) {
 				puntaje->gol();
-				// DISPARAR FUEGOS ARTIFICIALES
-				// Posiciones: un poco detrás del arco (z = -26) y a los lados (x = -5 y 5)
 				SistemaFuegos::getInstance()->crearExplosion(-5.0f, 2.0f, -26.0f);
 				SistemaFuegos::getInstance()->crearExplosion(5.0f, 2.0f, -26.0f);
 				reset();
-				return; // Salimos de la función para no procesar rebotes este frame
-			} else {
-				// Si toca la línea de fondo pero NO es gol, rebota
+				return;
+			}
+			else {
 				z = -max_z + radio;
 				vz = -vz;
 				interseccion = true;
 			}
 		}
-		// Se cruza el límite de atrás de la plataforma
 		if (z + radio > max_z) {
 			puntaje->fuera();
 			reset();
@@ -527,33 +519,27 @@ public:
 		}
 
 		if (max_z < z + radio) {
-			// Si la pelota toca el borde en max_z, perdés
 			z = x = 0;
 			interseccion = true;
-		} else if (z - radio < -max_z) {
-			// Si la pelota toca el borde en -max_z
+		}
+		else if (z - radio < -max_z) {
 			z = -max_z + radio;
 			vz = -vz;
 			interseccion = true;
 		}
 		if (max_x < x + radio) {
-			// Si la pelota toca el borde en max_x
 			x = max_x - radio;
 			vx = -vx;
 			interseccion = true;
-		} else if (x - radio < -max_x) {
-			// Si la pelota toca el borde en -max_x
+		}
+		else if (x - radio < -max_x) {
 			x = -max_x + radio;
 			vx = -vx;
 			interseccion = true;
 		}
 
-		for (auto objeto: objetos->lista()) {
+		for (auto objeto : objetos->lista()) {
 			bool inter_objeto = false;
-
-			// Las intersecciones son válidas solo si la pelota va en dirección opuesta
-			// a la normal de la superficie (que se aproxima como (x - objetoX) o
-			// (z - objetoZ))
 			if (objeto->interseccionX(x, z, radio) && vx * (x - objeto->getX()) <= 0) {
 				x -= dt * vx;
 				x += dt * objeto->getVelocidadX();
@@ -572,14 +558,10 @@ public:
 			}
 		}
 
-		// Si hubo una intersección, generar un cambio de ángulo chico aleatorio
-		// para que el juego no sea siempre igual.
 		if (interseccion) {
-			float a = 0.2 * (float) rand() / RAND_MAX - 0.1;
-
+			float a = 0.2 * (float)rand() / RAND_MAX - 0.1;
 			float cos_a = cos(a);
 			float sin_a = sin(a);
-
 			float nx = vx * cos_a - vz * sin_a;
 			float nz = vx * sin_a + vz * cos_a;
 
@@ -598,63 +580,70 @@ public:
 		glDisable(GL_LIGHTING);
 		glDisable(GL_TEXTURE_2D);
 		glDisable(GL_CULL_FACE);
+
+		// MEZCLA ADITIVA: Hace que la estela brille intensamente al sumar colores
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-		glDisable(GL_DEPTH_TEST);
+
+		glEnable(GL_DEPTH_TEST);
+		glDepthMask(GL_FALSE);
 
 		glBegin(GL_QUAD_STRIP);
 		for (size_t i = 0; i < estela.size(); i++) {
 			float factor = (float)i / (float)(estela.size() - 1);
-			float alfa = estela[i].vida;
-			float anchoActual = radio * (1.2f - factor);
-			float yOffset = estela[i].y + 0.05f;
 
-			// --- NUEVO: dirección tangente en cada punto ---
-			float dx, dz;
+			// ALFA LINEAL FUERTE: Solo decae por posición, garantizando que siempre se vea
+			float alfa = (1.0f - factor);
+			// Limitamos un poco si la vida es muy baja para limpiar la cola
+			if (estela[i].vida < 0.5f) alfa *= (estela[i].vida * 2.0f);
+
+			// Arranca un 20% más ancha que la pelota y termina en punta
+			float anchoActual = radio * (1.2f - factor * 1.2f);
+			if (anchoActual < 0.05f) anchoActual = 0.05f;
+
+			float yOffset = estela[i].y;
+
+			float dx = 0.0f, dz = 0.0f;
 			if (i == 0) {
-				// Cabeza: apunta del punto 1 hacia el 0
-				dx = estela[0].x - estela[1].x;
-				dz = estela[0].z - estela[1].z;
+				dx = estela[0].x - estela[1].x; dz = estela[0].z - estela[1].z;
 			}
 			else if (i == estela.size() - 1) {
-				// Cola: apunta del punto anterior hacia éste
-				dx = estela[i - 1].x - estela[i].x;
-				dz = estela[i - 1].z - estela[i].z;
+				dx = estela[i - 1].x - estela[i].x; dz = estela[i - 1].z - estela[i].z;
 			}
 			else {
-				// Puntos intermedios: promedio de ambos vecinos
-				dx = estela[i - 1].x - estela[i + 1].x;
-				dz = estela[i - 1].z - estela[i + 1].z;
+				dx = estela[i - 1].x - estela[i + 1].x; dz = estela[i - 1].z - estela[i + 1].z;
 			}
 
-			// Normalizar
 			float len = sqrtf(dx * dx + dz * dz);
-			if (len > 0.0001f) { dx /= len; dz /= len; }
+			float px = 1.0f, pz = 0.0f;
 
-			// Perpendicular en el plano XZ: rotar 90 (-dz, dx)
-			float px = -dz;
-			float pz = dx;
-			// --- FIN NUEVO ---
+			if (len > 0.001f) {
+				dx /= len; dz /= len;
+				px = -dz; pz = dx;
+			}
 
-			// Degradado amarillo (cabeza)  rojo (cola)
-			glColor4f(1.0f, 0.6f * (1.0f - factor), 0.0f, alfa);
+			// COLORES VIBRANTES (Blanco -> Amarillo -> Naranja -> Rojo Intenso)
+			float r = 1.0f;
+			float g = 1.0f - (factor * 1.5f); if (g < 0.0f) g = 0.0f;
+			float b = 1.0f - (factor * 4.0f); if (b < 0.0f) b = 0.0f;
+
+			glColor4f(r, g, b, alfa * 0.8f);
 
 			glVertex3f(estela[i].x + px * anchoActual, yOffset, estela[i].z + pz * anchoActual);
 			glVertex3f(estela[i].x - px * anchoActual, yOffset, estela[i].z - pz * anchoActual);
 		}
 		glEnd();
 
-		glEnable(GL_DEPTH_TEST);
+		glDepthMask(GL_TRUE);
 		glDisable(GL_BLEND);
-		glEnable(GL_LIGHTING);
 		glEnable(GL_CULL_FACE);
+		glEnable(GL_LIGHTING);
 
 		glPopMatrix();
 	}
 
-
 	void dibujar() {
-		dibujarEstela();	
+		dibujarEstela();
 		glPushMatrix();
 		glTranslatef(x, y, z);
 		glCallList(display_list);
@@ -758,7 +747,7 @@ void renderTexto(const string &texto, int x, int y, TTF_Font *fuente) {
 	SDL_FreeSurface(surface);
 }
 
-void dibujarHUD(Uint32 tiempoTranscurrido, bool pausa, Puntaje *puntaje, Fuente *fuente) {
+void dibujarHUD(Uint32 tiempoTranscurrido, bool pausa, Puntaje *puntaje, Fuente *fuente, float velocidad) {
 	glDisable(GL_LIGHTING); 
 	glDisable(GL_DEPTH_TEST);// El HUD no necesita luces
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -780,6 +769,17 @@ void dibujarHUD(Uint32 tiempoTranscurrido, bool pausa, Puntaje *puntaje, Fuente 
 
 	renderTexto("Goles: " + to_string(puntaje->getGoles()), 20, 660, fuente->getFont(24));
 	renderTexto("Tiempo: " + to_string(tiempoTranscurrido) + "s", 850, 660, fuente->getFont(24));
+
+	
+	// --- NUEVO: Render de velocidad ---
+	// Limitamos a un decimal para que quede estético (ej: "Velocidad: 1.2x")
+	char velTexto[20];
+
+	// ¡Esta es la línea que faltaba! Rellena el array con el texto formateado
+	snprintf(velTexto, sizeof(velTexto), "Velocidad: %.1fx", velocidad);
+
+	renderTexto(velTexto, 430, 20, fuente->getFont(24));
+	
 
 	// Restaurar estados para el próximo frame
 	glMatrixMode(GL_PROJECTION);
@@ -1030,17 +1030,21 @@ int main(int argc, char *argv[]) {
 				golero.mover(dtEscalado);
 			}
 
+
+			dibujarCancha(textura);
+			dibujarArco();
+			
 			for (auto objeto : listaObjetos->lista())
 				objeto->dibujar();
 
-			pelota.dibujar();
 			golero.dibujar();
+			pelota.dibujar();
+			SistemaFuegos::getInstance()->dibujar();
 
-			dibujarArco();
-			dibujarCancha(textura);
+			
 
 			// El HUD ya se encarga de renderizar de manera limpia los goles y el tiempo corregido por pausas
-			dibujarHUD(((now - tiempoInicial) - tiempoEnPausa) / 1000, pausa, puntaje, fuentes["arial"]);
+			dibujarHUD(((now - tiempoInicial) - tiempoEnPausa) / 1000, pausa, puntaje, fuentes["arial"], multiplicadorVelocidad);
 		}
 		// ==========================================
 		// CONTROL DE EVENTOS DE SDL (Estructura arreglada)
