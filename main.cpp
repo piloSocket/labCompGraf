@@ -50,6 +50,8 @@ private:
 	static SistemaFuegos* instancia;
 	SistemaFuegos() {}
 
+	const float gravedad = 4.f;
+	const float friccion = 0.2f;
 public:
 	static SistemaFuegos* getInstance() {
 		if (instancia == nullptr) instancia = new SistemaFuegos();
@@ -62,13 +64,16 @@ public:
 			p.x = x; p.y = y; p.z = z;
 
 			// Velocidad aleatoria tipo explosión
-			p.vx = ((rand() % 100) - 50) / 10.0f;
-			p.vy = ((rand() % 100) / 10.0f) + 2.0f; // Siempre hacia arriba
-			p.vz = ((rand() % 100) - 50) / 10.0f;
+			float phi = (float)rand() / RAND_MAX * M_PI * 2.0f;
+			float theta = (float)rand() / RAND_MAX * M_PI * 2.0f;
+			float norma = (float) rand() / RAND_MAX + 12.0f;
+			p.vx = cos(phi) * sin(theta) * norma;
+			p.vy = cos(theta) * norma;
+			p.vz = sin(phi) * sin(theta) * norma;
 
 			p.vida = 1.0f + (rand() % 100) / 100.0f; // 1 a 2 segundos
 
-			// Color Naranja (R=1.0, G=0.5, B=0.0) con ligera variación
+			// Color Naranja (R=1.0, G=0.5, B=0.0) con perturbación aleatoria
 			p.r = 1.0f;
 			p.g = 0.4f + (rand() % 30) / 100.0f;
 			p.b = 0.0f;
@@ -82,27 +87,40 @@ public:
 			it->vida -= dt;
 			if (it->vida <= 0) {
 				it = particulas.erase(it);
-			}
-			else {
+			} else {
 				// Aplicar física básica
 				it->x += it->vx * dt;
-				it->y += it->vy * dt;
+				it->y = max(0.f, it->y + it->vy * dt); // No permitir que atraviesen la cancha
 				it->z += it->vz * dt;
-				it->vy -= 9.8f * dt; // Gravedad
+
+				it->vx *= powf(friccion, dt);
+				it->vy *= powf(friccion, dt);
+				it->vz *= powf(friccion, dt);
+				it->vy -= gravedad * dt;
+
 				it++;
 			}
 		}
 	}
 
 	void dibujar() {
-		glDisable(GL_LIGHTING); // Los fuegos artificiales emiten luz, no la reciben
+		// Deshabilitar luz, pero habilitar transparencia
+		glDisable(GL_LIGHTING);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		glPointSize(3.0f);
 		glBegin(GL_POINTS);
 		for (const auto& p : particulas) {
-			glColor4f(p.r, p.g, p.b, p.vida); // El alpha depende de la vida restante
+			float transparencia = 1;
+
+			if (p.vida <= 0.24)
+				transparencia = p.vida * 4;
+
+			glColor4f(p.r, p.g, p.b, transparencia); // El alpha depende de la vida restante
 			glVertex3f(p.x, p.y, p.z);
 		}
 		glEnd();
+		glDisable(GL_BLEND);
 		glEnable(GL_LIGHTING);
 	}
 };
@@ -267,6 +285,7 @@ public:
 	bool interseccionZ(float x2, float z2, float radio) {
 	    float dx = max(0.f, abs(x - x2) - largo / 2);
 
+	    // Distancia vertical a cada cara
 	    float dz_frente = abs((z - ancho / 2) - z2);
 	    float dz_atras  = abs((z + ancho / 2) - z2);
 
@@ -402,21 +421,20 @@ public:
 ListaObjetos *ListaObjetos::listaObjetos = nullptr;
 
 struct PuntoEstela {
-	float x, y, z;
+	float x, z;
 	float vida; // De 1.0 a 0.0
-	bool salto;
 };
 
 class Pelota {
 private:
 	float radio;
-	float x, y, z, vx, vz, max_x, max_z;
+	float x, y, z, vx, vz, max_x, max_z, factor_v;
 	int display_list;
 	ListaObjetos* objetos;
 	Puntaje* puntaje;
 	std::deque<PuntoEstela> estela;
 
-	// AUMENTADO: De 20 a 45 para tener una cola mucho más larga y visible
+	// Tamaño de estela
 	const size_t MAX_PUNTOS_ESTELA = 45;
 
 public:
@@ -426,6 +444,7 @@ public:
 		display_list = glGenLists(1);
 		objetos = ListaObjetos::getInstance();
 		puntaje = Puntaje::getInstance();
+		factor_v = 1;
 
 		GLUquadric* q = gluNewQuadric();
 		y = radio;
@@ -453,34 +472,34 @@ public:
 	}
 
 	void mover(float dt) {
-		x += dt * vx;
-		z += dt * vz;
+		x += dt * vx * factor_v;
+		z += dt * vz * factor_v;
 
 		bool interseccion = false;
 
 		if (estela.size() < 2) {
 			estela.clear();
-			estela.push_front({ x, y, z, 1.0f, false });
-			estela.push_front({ x, y, z, 1.0f, false });
-		}
-		else {
+			estela.push_front({ x, z, 1.0f });
+			estela.push_front({ x, z, 1.0f });
+		} else {
 			float dx = x - estela[1].x;
 			float dz = z - estela[1].z;
-			float distSqr = dx * dx + dz * dz;
+			float len = dx * dx + dz * dz;
 
-			if (distSqr > 20.0f) {
+			// Si hubo un movimiento muy grande, resetear la estela
+			if (len > 20.0f) {
 				estela.clear();
-				estela.push_front({ x, y, z, 1.0f, false });
-				estela.push_front({ x, y, z, 1.0f, false });
+				estela.push_front({ x, z, 1.0f });
+				estela.push_front({ x, z, 1.0f });
 			}
-			// AUMENTADO: Ahora guardamos puntos cuando se separa 0.15f (antes 0.05). 
-			// Esto "estira" la estela haciéndola físicamente más larga en el espacio.
-			else if (distSqr > 0.15f) {
-				estela.push_front({ x, y, z, 1.0f, false });
+			// Si hubo un movimiento de al menos 0.15, agregar un nuevo punto a la estela
+			else if (len > 0.15f) {
+				estela.push_front({ x, z, 1.0f });
 				if (estela.size() > MAX_PUNTOS_ESTELA) {
 					estela.pop_back();
 				}
 			}
+			// Si no, mover el anterior punto de la estela a la posición actual
 			else {
 				estela[0].x = x;
 				estela[0].z = z;
@@ -488,83 +507,81 @@ public:
 			}
 		}
 
-		// DISMINUIDO: Se desvanece más lento (antes 1.5, ahora 0.8)
+		// Reducir el tiempo de vida restante de los puntos de la estela
 		for (size_t i = 1; i < estela.size(); i++) {
 			estela[i].vida -= dt * 0.8f;
 		}
 
+		// Borrar puntos de la estela que tienen tiempo de vida expirado
 		while (estela.size() > 2 && estela.back().vida <= 0) {
 			estela.pop_back();
 		}
 
-		// --- DETECCIÓN DE GOL Y BORDES (Intacta) ---
+		// Chequear intersecciones con borde superior/inferior
 		if (z - radio < -max_z) {
 			if (x > -6.0f && x < 6.0f) {
 				puntaje->gol();
-				SistemaFuegos::getInstance()->crearExplosion(-5.0f, 2.0f, -26.0f);
-				SistemaFuegos::getInstance()->crearExplosion(5.0f, 2.0f, -26.0f);
+				SistemaFuegos::getInstance()->crearExplosion(-5.0f, 5.0f, -26.0f);
+				SistemaFuegos::getInstance()->crearExplosion(5.0f, 5.0f, -26.0f);
 				reset();
 				return;
-			}
-			else {
+			} else {
 				z = -max_z + radio;
 				vz = -vz;
 				interseccion = true;
 			}
-		}
-		if (z + radio > max_z) {
+		} else if (z + radio > max_z) {
 			puntaje->fuera();
 			reset();
 			return;
 		}
 
-		if (max_z < z + radio) {
-			z = x = 0;
-			interseccion = true;
-		}
-		else if (z - radio < -max_z) {
-			z = -max_z + radio;
-			vz = -vz;
-			interseccion = true;
-		}
+		// Chequear intersecciones con bordes laterales
 		if (max_x < x + radio) {
 			x = max_x - radio;
 			vx = -vx;
 			interseccion = true;
-		}
-		else if (x - radio < -max_x) {
+		} else if (x - radio < -max_x) {
 			x = -max_x + radio;
 			vx = -vx;
 			interseccion = true;
 		}
 
+		// Chequear intersecciones con objetos
 		for (auto objeto : objetos->lista()) {
 			bool inter_objeto = false;
 			if (objeto->interseccionX(x, z, radio) && vx * (x - objeto->getX()) <= 0) {
-				x -= dt * vx;
+				x -= dt * vx * factor_v;
 				x += dt * objeto->getVelocidadX();
 				vx = -vx;
 				inter_objeto = interseccion = true;
 			}
 			if (objeto->interseccionZ(x, z, radio) && vz * (z - objeto->getZ()) <= 0) {
-				z -= dt * vz;
+				z -= dt * vz * factor_v;
 				vz = -vz;
 				inter_objeto = interseccion = true;
 			}
 
-			if (inter_objeto && dynamic_cast<Defensa*>(objeto)) {
-				objetos->borrar(objeto);
+			if (inter_objeto) {
+				// Si colisionamos con una defensa, borrarla
+				if (dynamic_cast<Defensa *>(objeto))
+					objetos->borrar(objeto);
+
+				// No calcular intersecciones para más de un objeto en un frame
 				break;
-			}
+			}		
 		}
 
+		// Si hubo una intersección, perturbar la dirección un poco
 		if (interseccion) {
-			float a = 0.2 * (float)rand() / RAND_MAX - 0.1;
+			float a = 0.2 * (float) rand() / RAND_MAX - 0.1;
 			float cos_a = cos(a);
 			float sin_a = sin(a);
 			float nx = vx * cos_a - vz * sin_a;
 			float nz = vx * sin_a + vz * cos_a;
 
+			// Evitar cambios de dirección, es decir, evitar que el vector
+			// cambie de cuadrante para que por ejemplo no vuelva por donde vino
 			if (nx * vx >= 0 && nz * vz >= 0) {
 				vx = nx;
 				vz = nz;
@@ -572,74 +589,72 @@ public:
 		}
 	}
 
+	void setVelocidad(float factor_v) {
+		this->factor_v = factor_v;
+	}
+
 	void dibujarEstela() {
 		if (estela.size() < 2) return;
 
-		glPushMatrix();
-
 		glDisable(GL_LIGHTING);
-		glDisable(GL_TEXTURE_2D);
-		glDisable(GL_CULL_FACE);
 
 		// MEZCLA ADITIVA: Hace que la estela brille intensamente al sumar colores
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
 
-		glEnable(GL_DEPTH_TEST);
+		// Para dibujar transparencias correctamente, no escribir al z-buffer
 		glDepthMask(GL_FALSE);
 
 		glBegin(GL_QUAD_STRIP);
 		for (size_t i = 0; i < estela.size(); i++) {
-			float factor = (float)i / (float)(estela.size() - 1);
+			float factor = (float) i / (float) (estela.size() - 1);
 
-			// ALFA LINEAL FUERTE: Solo decae por posición, garantizando que siempre se vea
-			float alfa = (1.0f - factor);
-			// Limitamos un poco si la vida es muy baja para limpiar la cola
-			if (estela[i].vida < 0.5f) alfa *= (estela[i].vida * 2.0f);
+			// Poner colores vibrantes (Blanco -> Amarillo -> Naranja -> Rojo Intenso)
+			// con transparencia que disminuye a lo largo de la estela
+			float r = 1.0f,
+				  g = max(0.f, 1.0f - (factor * 1.5f)),
+				  b = max(0.f, 1.0f - (factor * 4.0f)),
+				  transparencia = 0.8 * (1.0f - factor);
 
-			// Arranca un 20% más ancha que la pelota y termina en punta
-			float anchoActual = radio * (1.2f - factor * 1.2f);
-			if (anchoActual < 0.05f) anchoActual = 0.05f;
+			glColor4f(r, g, b, transparencia);
 
-			float yOffset = estela[i].y;
+			float anchoActual = max(0.05f, radio * (1.0f - factor));
 
-			float dx = 0.0f, dz = 0.0f;
+			// El vector (dx, dz) es una aproximación de la dirección de movimiento
+			// de la pelota cuando se tomó la muestra i para la estela
+			float dx, dz;
 			if (i == 0) {
-				dx = estela[0].x - estela[1].x; dz = estela[0].z - estela[1].z;
-			}
-			else if (i == estela.size() - 1) {
-				dx = estela[i - 1].x - estela[i].x; dz = estela[i - 1].z - estela[i].z;
-			}
-			else {
-				dx = estela[i - 1].x - estela[i + 1].x; dz = estela[i - 1].z - estela[i + 1].z;
+				dx = estela[0].x - estela[1].x;
+				dz = estela[0].z - estela[1].z;
+			} else if (i == estela.size() - 1) {
+				dx = estela[i - 1].x - estela[i].x;
+				dz = estela[i - 1].z - estela[i].z;
+			} else {
+				dx = estela[i - 1].x - estela[i + 1].x;
+				dz = estela[i - 1].z - estela[i + 1].z;
 			}
 
 			float len = sqrtf(dx * dx + dz * dz);
-			float px = 1.0f, pz = 0.0f;
 
-			if (len > 0.001f) {
-				dx /= len; dz /= len;
-				px = -dz; pz = dx;
+			// Condición para evitar dividir entre cero
+			if (len > 1e-5f) {
+				// Normalizar el vector (dx, dz)
+				dx /= len;
+				dz /= len;
 			}
 
-			// COLORES VIBRANTES (Blanco -> Amarillo -> Naranja -> Rojo Intenso)
-			float r = 1.0f;
-			float g = 1.0f - (factor * 1.5f); if (g < 0.0f) g = 0.0f;
-			float b = 1.0f - (factor * 4.0f); if (b < 0.0f) b = 0.0f;
-
-			glColor4f(r, g, b, alfa * 0.8f);
-
-			glVertex3f(estela[i].x + px * anchoActual, yOffset, estela[i].z + pz * anchoActual);
-			glVertex3f(estela[i].x - px * anchoActual, yOffset, estela[i].z - pz * anchoActual);
+			// El ancho de la estela es perpendicular a la dirección de movimiento de
+			// la pelota, que es (dx, dz). Entonces, el ancho está en la dirección
+			// (dz, -dx)
+			glVertex3f(estela[i].x - dz * anchoActual, y, estela[i].z + dx * anchoActual);
+			glVertex3f(estela[i].x + dz * anchoActual, y, estela[i].z - dx * anchoActual);
 		}
 		glEnd();
 
+		// Volver valores a su estado inicial
 		glDepthMask(GL_TRUE);
 		glDisable(GL_BLEND);
-		glEnable(GL_CULL_FACE);
 		glEnable(GL_LIGHTING);
-
-		glPopMatrix();
 	}
 
 	void dibujar() {
@@ -875,7 +890,7 @@ int main(int argc, char *argv[]) {
 	bitmap = FreeImage_ConvertTo24Bits(bitmap);
 	int w = FreeImage_GetWidth(bitmap);
 	int h = FreeImage_GetHeight(bitmap);
-	void* datos = FreeImage_GetBits(bitmap);
+	void *datos = FreeImage_GetBits(bitmap);
 	//FIN CARGAR IMAGEN
 
 	GLuint textura;
@@ -941,13 +956,10 @@ int main(int argc, char *argv[]) {
 	// LOOP PRINCIPAL
 	do {
 		Uint32 now = SDL_GetTicks();
-		float deltaTimeReal = (now - last) / 1000.0f;
+		float deltaTime = (now - last) / 1000.0f;
 
 		// Evitamos picos extraños en el delta time si la ventana se congela un milisegundo
-		if (deltaTimeReal > 0.1f) deltaTimeReal = 0.1f;
-
-		// Calculamos el delta escalado para la lógica de movimiento
-		float dtEscalado = deltaTimeReal * multiplicadorVelocidad;
+		if (deltaTime > 0.1f) deltaTime = 0.1f;
 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
@@ -1000,7 +1012,7 @@ int main(int argc, char *argv[]) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 		}
 
-		// Configuración de texturas (on/off)
+		// Configuración de Texturas (on/off)
 		if (texturas)
 			glEnable(GL_TEXTURE_2D);
 		else
@@ -1010,26 +1022,22 @@ int main(int argc, char *argv[]) {
 
 		if (menu) {
 			dibujarMenu((now - tiempoInicial) / 1000, fuentes["audiowide"]);
-		}
-		else {
+		} else {
 			if (pausa) {
 				tiempoEnPausa += now - last;
-			}
-			else {
-				// Corregido: Usamos dtEscalado para que la velocidad afecte a todo el entorno uniformemente
-				pelota.mover(dtEscalado);
-				SistemaFuegos::getInstance()->actualizar(dtEscalado);
+			} else {
+				pelota.mover(deltaTime);
+				SistemaFuegos::getInstance()->actualizar(deltaTime);
 
 				if (right)
-					plataforma.mover(dtEscalado, 1);
+					plataforma.mover(deltaTime, 1);
 				else if (left)
-					plataforma.mover(dtEscalado, -1);
+					plataforma.mover(deltaTime, -1);
 				else
-					plataforma.mover(dtEscalado, 0);
+					plataforma.mover(deltaTime, 0);
 
-				golero.mover(dtEscalado);
+				golero.mover(deltaTime);
 			}
-
 
 			dibujarCancha(textura);
 			dibujarArco();
@@ -1041,14 +1049,10 @@ int main(int argc, char *argv[]) {
 			pelota.dibujar();
 			SistemaFuegos::getInstance()->dibujar();
 
-			
-
-			// El HUD ya se encarga de renderizar de manera limpia los goles y el tiempo corregido por pausas
+			// El HUD renderiza los goles y el tiempo corregido por pausas
 			dibujarHUD(((now - tiempoInicial) - tiempoEnPausa) / 1000, pausa, puntaje, fuentes["arial"], multiplicadorVelocidad);
 		}
-		// ==========================================
-		// CONTROL DE EVENTOS DE SDL (Estructura arreglada)
-		// ==========================================
+
 		while (SDL_PollEvent(&evento)) {
 			switch (evento.type) {
 			case SDL_QUIT:
@@ -1060,8 +1064,7 @@ int main(int argc, char *argv[]) {
 					if (evento.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
 						radio += evento.motion.yrel * 0.05f;
 						if (radio < 0.5f) radio = 0.5f;
-					}
-					else {
+					} else {
 						// Órbita
 						float sensibilidad = 0.2f;
 						// Mantener yaw entre -90 y 90, y el pitch mayor a 10
@@ -1086,24 +1089,24 @@ int main(int argc, char *argv[]) {
 				case SDLK_RIGHT: right = true; break;
 				case SDLK_LEFT:  left = true;  break;
 
-					// Controles de velocidad con flechas
+				// Controles de velocidad con flechas
 				case SDLK_UP:
 					multiplicadorVelocidad = min(VEL_MAXIMA, multiplicadorVelocidad + PASO_VELOCIDAD);
+					pelota.setVelocidad(multiplicadorVelocidad);
 					break;
 				case SDLK_DOWN:
 					multiplicadorVelocidad = max(VEL_MINIMA, multiplicadorVelocidad - PASO_VELOCIDAD);
+					pelota.setVelocidad(multiplicadorVelocidad);
 					break;
 				case SDLK_v:
 					// Ciclo de cámaras
 					if (vistaActual == ORIGINAL) {
 						vistaActual = PERSONAJE;
 						SDL_SetRelativeMouseMode(SDL_FALSE);
-					}
-					else if (vistaActual == PERSONAJE) {
+					} else if (vistaActual == PERSONAJE) {
 						vistaActual = LIBRE;
 						SDL_SetRelativeMouseMode(SDL_TRUE);  // Atrapamos cursor en modo libre
-					}
-					else {
+					} else {
 						vistaActual = ORIGINAL;
 						SDL_SetRelativeMouseMode(SDL_FALSE);
 					}
@@ -1114,11 +1117,13 @@ int main(int argc, char *argv[]) {
 					break;
 				case SDLK_p:
 					if (menu) {
+							SistemaFuegos::getInstance()->crearExplosion(-5.0f, 5.0f, -26.0f);
+	SistemaFuegos::getInstance()->crearExplosion(5.0f, 5.0f, -26.0f);
+
 						menu = false;
 						tiempoInicial = SDL_GetTicks();
 						tiempoEnPausa = 0; // Resetear tiempos de partidas previas
-					}
-					else {
+					} else {
 						pausa = !pausa;
 					}
 					break;
