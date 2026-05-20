@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <string>
 #include <map>
+#include <fstream>
+#include <sstream>
 #ifdef __APPLE__
 #include <OpenGL/glu.h>
 #include <SDL2/SDL_ttf.h>
@@ -35,6 +37,16 @@ void luzDifusa(float r, float g, float b) {
 void luzAmbiente(float r, float g, float b) {
 	GLfloat ambient[] = {r, g, b, 1.0f};
 	glMaterialfv(GL_FRONT, GL_AMBIENT, ambient);
+}
+
+void luzEspecular(float r, float g, float b) {
+	GLfloat specular[] = {r, g, b, 1.0f};
+	glMaterialfv(GL_FRONT, GL_SPECULAR, specular);
+}
+
+void luzBrillo(float b) {
+	GLfloat brillo[] = {64.0f};
+	glMaterialfv(GL_FRONT, GL_SHININESS, brillo);
 }
 
 struct Particula {
@@ -185,7 +197,6 @@ void dibujarArco() {
 }
 
 void dibujarCancha(GLuint textura) {
-	glEnable(GL_TEXTURE_2D); // Asegurar que esté activa por si acaso
 	glBindTexture(GL_TEXTURE_2D, textura);
 
 	// Setear material neutral para que la textura muestre sus colores reales bajo la luz
@@ -198,7 +209,6 @@ void dibujarCancha(GLuint textura) {
 	glPopMatrix();
 
 	glBindTexture(GL_TEXTURE_2D, 0); // Buena práctica: desvincular
-	glDisable(GL_TEXTURE_2D);
 }
 
 class Puntaje {
@@ -308,20 +318,21 @@ private:
 	const float limite = 4.5f; // El arco mide 12, el golero se mueve en este rango
 
 public:
-	Golero() {
+	Golero(float velocidad) {
 		x = 0.0f;
 		y = 1.5f;    // Altura media para que toque el suelo
 		z = -24.0f;  // Un poquito adelante del arco (que está en -25)
 		largo = 2.0;
 		alto = 3.0;
 		ancho = 1.0;
-		vx = velocidad = 8.0f;
+		vx = this->velocidad = velocidad;
 		vz = 0;
 		direccion = 1;
 
 		display_list = glGenLists(1);
 
 		glNewList(display_list, GL_COMPILE);
+		glColor3f(1, 1, 1);
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
 	}
@@ -345,30 +356,31 @@ public:
 
 class Plataforma: public Objeto {
 private:
-	float v, max_x;
+	float velocidad, max_x;
 public:
-	explicit Plataforma(float max_x): max_x(max_x) {
+	explicit Plataforma(float velocidad): velocidad(velocidad) {
 		display_list = glGenLists(1);
 
+		max_x = 13;
 		largo = 5;
 		alto = 1;
 		ancho = 1;
 		x = 0;
 		y = alto / 2;
 		z = 22;
-		vx = v = 15;
-		vz = 0;
+		vx = vz = 0;
 
 		glNewList(display_list, GL_COMPILE);
+		glColor3f(1, 1, 1);
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
 	}
 
 	void mover(float dt, float direccion) {
-		x += v * dt * direccion;
+		x += velocidad * dt * direccion;
 		x = min(x, max_x - largo / 2);
 		x = max(x, -max_x + largo / 2);
-		vx = v * direccion;
+		vx = velocidad * direccion;
 	}
 };
 
@@ -386,6 +398,7 @@ public:
 		vx = vz = 0;
 
 		glNewList(display_list, GL_COMPILE);
+		glColor3f(1, 1, 1);
 		dibujarCubo(largo, alto, ancho);
 		glEndList();
 	}
@@ -394,15 +407,8 @@ public:
 class ListaObjetos {
 private:
 	vector<Objeto *> objetos;
-	static ListaObjetos *listaObjetos;
-
-	ListaObjetos() {}
 public:
-	static ListaObjetos *getInstance() {
-        if (listaObjetos == nullptr)
-        	listaObjetos = new ListaObjetos;
-        return listaObjetos;
-    }
+	ListaObjetos() {}
 
 	void agregar(Objeto *o) {
 		objetos.push_back(o);
@@ -417,8 +423,6 @@ public:
 		return objetos;
 	}
 };
-
-ListaObjetos *ListaObjetos::listaObjetos = nullptr;
 
 struct PuntoEstela {
 	float x, z;
@@ -438,16 +442,17 @@ private:
 	const size_t MAX_PUNTOS_ESTELA = 45;
 
 public:
-	// vxi y vzi son las velocidades iniciales en x y en z.
-	Pelota(float x, float z, float radio, float vxi, float vzi, float max_x, float max_z)
-		: x(x), z(z), radio(radio), vx(vxi), vz(vzi), max_x(max_x), max_z(max_z) {
+	Pelota(float x, float z, float radio, float velocidad, float max_x, float max_z, ListaObjetos *objetos)
+		: x(x), z(z), radio(radio), max_x(max_x), max_z(max_z), objetos(objetos) {
 		display_list = glGenLists(1);
-		objetos = ListaObjetos::getInstance();
 		puntaje = Puntaje::getInstance();
 		factor_v = 1;
 
 		GLUquadric* q = gluNewQuadric();
 		y = radio;
+
+		vx = velocidad / sqrt(2);
+		vz = velocidad / sqrt(2);
 
 		glNewList(display_list, GL_COMPILE);
 		glPushMatrix();
@@ -704,6 +709,47 @@ public:
 	}
 };
 
+class Nivel {
+private:
+	int goles_necesarios, fueras_maximas;
+	bool hay_golero;
+	ListaObjetos *objetos;
+	Plataforma plataforma;
+	Pelota pelota;
+	Golero golero;
+
+public:
+	Nivel(float velocidad_pelota, float velocidad_plataforma, float velocidad_golero, int goles_necesarios, int fueras_maximas, bool hay_golero)
+		: goles_necesarios(goles_necesarios), fueras_maximas(fueras_maximas), hay_golero(hay_golero), objetos(new ListaObjetos()),
+		  plataforma(velocidad_plataforma), pelota(0, 0, 1, velocidad_pelota, 15, 25, objetos), golero(velocidad_golero) {
+		objetos->agregar(&plataforma);
+		if (hay_golero)
+			objetos->agregar(&golero);
+	}
+
+	~Nivel() {
+		delete objetos;
+	}
+
+	void agregarDefensa(float x, float y) {
+		objetos->agregar(new Defensa(x, y));
+	}
+
+	void mover(float dt, float direccion_plataforma) {
+		if (hay_golero)
+			golero.mover(dt);
+		pelota.mover(dt);
+		plataforma.mover(dt, direccion_plataforma);
+	}
+
+	void dibujar() {
+		pelota.dibujar();
+
+		for (auto objeto : objetos->lista())
+			objeto->dibujar();
+	}
+};
+
 void renderTexto(const string &texto, int x, int y, TTF_Font *fuente) {
 	if (!fuente || texto.empty()) return;
 
@@ -735,7 +781,10 @@ void renderTexto(const string &texto, int x, int y, TTF_Font *fuente) {
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_TEXTURE_2D);
+	bool texturasActivadas = glIsEnabled(GL_TEXTURE_2D);
+
+	if (!texturasActivadas)
+		glEnable(GL_TEXTURE_2D);
 
 	// CAMBIO 3: Usamos GL_MODULATE y seteamos el color explícitamente a blanco.
 	// GL_REPLACE ignora por completo la transparencia si el entorno no está perfecto.
@@ -751,9 +800,11 @@ void renderTexto(const string &texto, int x, int y, TTF_Font *fuente) {
 	glEnd();
 
 	glDisable(GL_BLEND);
-	glDisable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDeleteTextures(1, &texturaTexto);
+
+	if (!texturasActivadas)
+		glDisable(GL_TEXTURE_2D);
 
 	// CAMBIO 4: Restauramos la alineación por defecto para no afectar
 	// la carga de otras texturas (como la cancha) más adelante.
@@ -837,6 +888,92 @@ void dibujarMenu(Uint32 tiempoTranscurrido, Fuente *fuente) {
 	glEnable(GL_LIGHTING);
 }
 
+struct Mesh {
+    std::vector<float> positions;  // x,y,z por vértice
+    std::vector<float> normals;    // x,y,z por vértice
+    std::vector<float> texcoords;  // u,v por vértice
+    std::vector<float> colors;     // r,g,b por vértice
+};
+
+Mesh parseOBJ(const std::string& path) {
+    std::vector<float> pos, nor, tex, col;  // datos crudos del archivo
+    Mesh mesh;
+
+    std::ifstream file(path);
+    std::string line;
+
+    while (std::getline(file, line)) {
+        std::istringstream ss(line);
+        std::string token;
+        ss >> token;
+
+        if (token == "v") {
+		    float x, y, z;
+		    ss >> x >> y >> z;
+		    pos.push_back(x); pos.push_back(y); pos.push_back(z);
+
+		    // Intentar leer color RGB opcional
+		    float r, g, b;
+		    if (ss >> r >> g >> b) {
+		        col.push_back(r); col.push_back(g); col.push_back(b);
+		    } else {
+		        // Sin color: valor centinela para saber que no hay datos
+		        col.push_back(-1.0f); col.push_back(-1.0f); col.push_back(-1.0f);
+		    }
+        } else if (token == "vn") {
+            float x, y, z;
+            ss >> x >> y >> z;
+            nor.push_back(x); nor.push_back(y); nor.push_back(z);
+        } else if (token == "vt") {
+            float u, v;
+            ss >> u >> v;
+            tex.push_back(u); tex.push_back(v);
+        } else if (token == "f") {
+            std::string vtx;
+            while (ss >> vtx) {
+                unsigned int vi = 0, ti = 0, ni = 0;
+                sscanf(vtx.c_str(), "%u/%u/%u", &vi, &ti, &ni);
+
+                if (vi > 0) {
+                    mesh.positions.push_back(pos[(vi-1)*3]);
+                    mesh.positions.push_back(pos[(vi-1)*3 + 1]);
+                    mesh.positions.push_back(pos[(vi-1)*3 + 2]);
+                }
+                if (ti > 0) {
+                    mesh.texcoords.push_back(tex[(ti-1)*2]);
+                    mesh.texcoords.push_back(tex[(ti-1)*2 + 1]);
+                }
+                if (ni > 0) {
+                    mesh.normals.push_back(nor[(ni-1)*3]);
+                    mesh.normals.push_back(nor[(ni-1)*3 + 1]);
+                    mesh.normals.push_back(nor[(ni-1)*3 + 2]);
+
+		            mesh.colors.push_back(col[(vi-1)*3]);
+		            mesh.colors.push_back(col[(vi-1)*3 + 1]);
+		            mesh.colors.push_back(col[(vi-1)*3 + 2]);
+                }
+            }
+        }
+    }
+    return mesh;
+}
+
+void renderMesh(const Mesh& mesh) {
+    bool hasColors = mesh.colors.size()   == mesh.positions.size();
+    bool hasNormals = mesh.normals.size()  == mesh.positions.size();
+
+    glBegin(GL_TRIANGLES);
+    size_t count = mesh.positions.size() / 3;
+    for (size_t i = 0; i < count; i++) {
+        if (hasColors)
+            glColor3f(mesh.colors[i*3], mesh.colors[i*3+1], mesh.colors[i*3+2]);
+        if (hasNormals)
+            glNormal3f(mesh.normals[i*3], mesh.normals[i*3+1], mesh.normals[i*3+2]);
+        glVertex3f(mesh.positions[i*3], mesh.positions[i*3+1], mesh.positions[i*3+2]);
+    }
+    glEnd();
+}
+
 int main(int argc, char *argv[]) {
 	srand(time(NULL));
 	//INICIALIZACION
@@ -866,7 +1003,7 @@ int main(int argc, char *argv[]) {
 
 	glClearColor(0, 0, 0, 1);
 
-	gluPerspective(45, 1000 / 700.f, 0.1, 110);
+	gluPerspective(45, 1000 / 700.f, 0.1, 120);
 	glEnable(GL_DEPTH_TEST);
 	glMatrixMode(GL_MODELVIEW);
 
@@ -902,6 +1039,7 @@ int main(int argc, char *argv[]) {
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_BGR, GL_UNSIGNED_BYTE, datos);
 	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB, w, h, GL_RGB, GL_UNSIGNED_BYTE, datos);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
@@ -933,11 +1071,11 @@ int main(int argc, char *argv[]) {
 	GLfloat colorLuz[4] = { 1, 1, 1, 1 };
 	
 	// Variables de juego
-	Golero golero;
+	Golero golero(8);
 	Puntaje *puntaje = Puntaje::getInstance();
 
-	Plataforma plataforma(13);
-	ListaObjetos *listaObjetos = ListaObjetos::getInstance();
+	Plataforma plataforma(15);
+	ListaObjetos *listaObjetos = new ListaObjetos();
 
 	listaObjetos->agregar(new Defensa(-12, -10));
 	listaObjetos->agregar(new Defensa(-8, -10));
@@ -949,7 +1087,20 @@ int main(int argc, char *argv[]) {
 	listaObjetos->agregar(&plataforma);
 	listaObjetos->agregar(&golero);
 
-	Pelota pelota(0, 0, 1, 20, 20, 15, 25);
+	Pelota pelota(0, 0, 1, 30, 15, 25, listaObjetos);
+	Mesh mesh(parseOBJ("./Untitled.obj"));
+	Mesh mesh2(parseOBJ("./Cuadrado.obj"));
+	GLuint listId = glGenLists(1);
+	glNewList(listId, GL_COMPILE);
+		glPushMatrix();
+		glTranslatef(0, -0.05, 0);
+		glScalef(5, 5, 5);
+		renderMesh(mesh);
+		luzBrillo(8);
+		luzDifusa(0.2, 0.7, 0.2);
+		renderMesh(mesh2);
+		glPopMatrix();
+	glEndList();
 
 	Uint32 last = SDL_GetTicks();
 
@@ -991,34 +1142,34 @@ int main(int argc, char *argv[]) {
 		glEnable(GL_LIGHT0);
 		glLightfv(GL_LIGHT0, GL_POSITION, luz_posicion);
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, colorLuz);
-
+		glLightfv(GL_LIGHT0, GL_SPECULAR, colorLuz);
+		
 		glEnable(GL_LIGHT1);
 		glLightfv(GL_LIGHT1, GL_POSITION, luz_posicion1);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, colorLuz);
-
+		glLightfv(GL_LIGHT1, GL_SPECULAR, colorLuz);
+		
 		glEnable(GL_LIGHT2);
 		glLightfv(GL_LIGHT2, GL_POSITION, luz_posicion2);
 		glLightfv(GL_LIGHT2, GL_DIFFUSE, colorLuz);
-
+		glLightfv(GL_LIGHT2, GL_SPECULAR, colorLuz);
+		
 		glEnable(GL_LIGHT3);
 		glLightfv(GL_LIGHT3, GL_POSITION, luz_posicion3);
 		glLightfv(GL_LIGHT3, GL_DIFFUSE, colorLuz);
+		glLightfv(GL_LIGHT3, GL_SPECULAR, colorLuz);
 
 		// Configuración de Wireframes (on/off)
-		if (wireframe) {
+		if (wireframe)
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		}
-		else {
+		else
 			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		}
 
 		// Configuración de Texturas (on/off)
 		if (texturas)
 			glEnable(GL_TEXTURE_2D);
 		else
 			glDisable(GL_TEXTURE_2D);
-
-		luzAmbiente(1, 1, 1);
 
 		if (menu) {
 			dibujarMenu((now - tiempoInicial) / 1000, fuentes["audiowide"]);
@@ -1039,9 +1190,11 @@ int main(int argc, char *argv[]) {
 				golero.mover(deltaTime);
 			}
 
-			dibujarCancha(textura);
-			dibujarArco();
-			
+			luzAmbiente(0.2, 0.2, 0.2);
+			luzDifusa(1, 1, 1);
+			luzEspecular(0.2, 0.2, 0.2);
+			luzBrillo(64);
+
 			for (auto objeto : listaObjetos->lista())
 				objeto->dibujar();
 
@@ -1049,6 +1202,15 @@ int main(int argc, char *argv[]) {
 			pelota.dibujar();
 			SistemaFuegos::getInstance()->dibujar();
 
+			dibujarArco();
+			dibujarCancha(textura);
+
+			luzEspecular(1, 1, 1);
+			luzBrillo(128);
+			glCallList(listId);
+
+			// NOTA: para que desactivar wireframes funcione bien, el HUD se tiene que dibujar
+			// después de todo el resto
 			// El HUD renderiza los goles y el tiempo corregido por pausas
 			dibujarHUD(((now - tiempoInicial) - tiempoEnPausa) / 1000, pausa, puntaje, fuentes["arial"], multiplicadorVelocidad);
 		}
@@ -1117,9 +1279,6 @@ int main(int argc, char *argv[]) {
 					break;
 				case SDLK_p:
 					if (menu) {
-							SistemaFuegos::getInstance()->crearExplosion(-5.0f, 5.0f, -26.0f);
-	SistemaFuegos::getInstance()->crearExplosion(5.0f, 5.0f, -26.0f);
-
 						menu = false;
 						tiempoInicial = SDL_GetTicks();
 						tiempoEnPausa = 0; // Resetear tiempos de partidas previas
@@ -1128,11 +1287,11 @@ int main(int argc, char *argv[]) {
 					}
 					break;
 				case SDLK_t:
-					if (menu)
+					if (!menu)
 						texturas = !texturas;
 					break;
 				case SDLK_w:
-					if (menu)
+					if (!menu)
 						wireframe = !wireframe;
 					break;
 				}
